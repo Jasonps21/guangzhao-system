@@ -11,6 +11,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
 class PdfController extends Controller
@@ -42,11 +43,13 @@ class PdfController extends Controller
             ])
             ->values();
 
+        $organization = OrganizationSetting::current();
+
         $pdf = Pdf::loadView('pdf.coupons', [
             'records' => $records,
             'period' => Carbon::create($year, $month, 1)->translatedFormat('F Y'),
-            'organization' => OrganizationSetting::current(),
-            'logo' => $this->logoDataUri(),
+            'organization' => $organization,
+            'logo' => $this->logoDataUri($organization),
         ])->setPaper([0, 0, 609.45, 935.43]); // F4 215×330mm in points
 
         return $pdf->stream("kupon-iuran-{$year}-{$month}.pdf");
@@ -85,10 +88,12 @@ class PdfController extends Controller
             }
         }
 
+        $organization = OrganizationSetting::current();
+
         $pdf = Pdf::loadView('pdf.member-list', [
             'groups' => $groups,
-            'organization' => OrganizationSetting::current(),
-            'logo' => $this->logoDataUri(),
+            'organization' => $organization,
+            'logo' => $this->logoDataUri($organization),
             'printedAt' => now()->translatedFormat('d F Y H:i'),
         ])->setPaper('a4', 'landscape');
 
@@ -100,10 +105,12 @@ class PdfController extends Controller
      */
     public function memberCard(Member $member): Response
     {
+        $organization = OrganizationSetting::current();
+
         $pdf = Pdf::loadView('pdf.member-card', [
             'member' => $member->load('group'),
-            'organization' => OrganizationSetting::current(),
-            'logo' => $this->logoDataUri(),
+            'organization' => $organization,
+            'logo' => $this->logoDataUri($organization),
         ])->setPaper([0, 0, 243.78, 153.07]); // 86×54mm in points
 
         return $pdf->stream("kartu-{$member->member_number}.pdf");
@@ -111,17 +118,26 @@ class PdfController extends Controller
 
     /**
      * Logo perkumpulan sebagai data URI base64 agar selalu ter-embed di PDF
-     * tanpa bergantung pada akses file/remote DomPDF. Null bila logo tak ada.
+     * tanpa bergantung pada akses file/remote DomPDF. Memakai logo yang diunggah
+     * admin bila ada; jika tidak, jatuh ke logo bawaan. Null bila keduanya kosong.
      */
-    private function logoDataUri(): ?string
+    private function logoDataUri(OrganizationSetting $organization): ?string
     {
-        $path = public_path('images/logo-guangzao.png');
+        $uploaded = $organization->logo_path;
 
-        if (! is_file($path)) {
+        if ($uploaded !== null && Storage::disk('public')->exists($uploaded)) {
+            $mime = Storage::disk('public')->mimeType($uploaded) ?: 'image/png';
+
+            return 'data:'.$mime.';base64,'.base64_encode(Storage::disk('public')->get($uploaded));
+        }
+
+        $bundled = public_path('images/logo-guangzao.png');
+
+        if (! is_file($bundled)) {
             return null;
         }
 
-        return 'data:image/png;base64,'.base64_encode((string) file_get_contents($path));
+        return 'data:image/png;base64,'.base64_encode((string) file_get_contents($bundled));
     }
 
     /**

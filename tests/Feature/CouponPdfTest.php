@@ -6,8 +6,11 @@ use App\Enums\MemberStatus;
 use App\Models\DuesRecord;
 use App\Models\Member;
 use App\Models\MemberGroup;
+use App\Models\OrganizationSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CouponPdfTest extends TestCase
@@ -64,6 +67,55 @@ class CouponPdfTest extends TestCase
         ]));
 
         // Two coupons in group A (numbers 1, 2) and one in group B (number 1).
+        $response->assertOk();
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_coupon_embeds_uploaded_logo_when_present(): void
+    {
+        Storage::fake('public');
+        $path = Storage::disk('public')->putFile(
+            'organization',
+            UploadedFile::fake()->image('logo.png', 200, 200),
+        );
+        OrganizationSetting::current()->update(['logo_path' => $path]);
+
+        $admin = User::factory()->admin()->create();
+        $member = Member::factory()->active()->create();
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('dues.coupons', [
+            'year' => 2025,
+            'month' => 12,
+        ]));
+
+        $response->assertOk();
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_coupon_falls_back_to_bundled_logo_when_upload_missing(): void
+    {
+        Storage::fake('public');
+        // Path tercatat di DB tetapi berkasnya tidak ada — harus jatuh ke logo bawaan.
+        OrganizationSetting::current()->update(['logo_path' => 'organization/hilang.png']);
+
+        $admin = User::factory()->admin()->create();
+        $member = Member::factory()->active()->create();
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('dues.coupons', [
+            'year' => 2025,
+            'month' => 12,
+        ]));
+
         $response->assertOk();
         $this->assertStringStartsWith('%PDF', $response->getContent());
     }

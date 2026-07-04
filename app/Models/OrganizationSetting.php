@@ -9,6 +9,7 @@ class OrganizationSetting extends Model
     protected $fillable = [
         'name',
         'name_hanzi',
+        'logo_path',
         'contact_line',
         'chairman_name',
         'treasurer_name',

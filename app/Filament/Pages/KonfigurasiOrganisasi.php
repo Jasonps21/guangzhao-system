@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\OrganizationSetting;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -48,6 +49,15 @@ class KonfigurasiOrganisasi extends Page
                     Section::make('Identitas pada Kupon Iuran')
                         ->description('Teks ini dicetak di bagian atas dan bawah kupon iuran.')
                         ->schema([
+                            FileUpload::make('logo_path')
+                                ->label('Logo Organisasi')
+                                ->helperText('Dicetak pada kupon iuran, kartu, dan daftar anggota. Kosongkan untuk memakai logo bawaan.')
+                                ->image()
+                                ->disk('public')
+                                ->directory('organization')
+                                ->visibility('public')
+                                ->imageEditor()
+                                ->maxSize(2048),
                             TextInput::make('name')
                                 ->label('Nama Organisasi')
                                 ->required()
