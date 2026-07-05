@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -26,6 +27,11 @@ class Member extends Model
         'name_pinyin',
         'name_indonesian',
         'address',
+        'latitude',
+        'longitude',
+        'house_photo_path',
+        'location_updated_at',
+        'location_updated_by',
         'phone',
         'photo_path',
         'dues_category',
@@ -47,6 +53,9 @@ class Member extends Model
             'bill_at_home' => 'boolean',
             'monthly_dues_amount' => 'decimal:2',
             'status_changed_at' => 'datetime',
+            'location_updated_at' => 'datetime',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
             'joined_at' => 'date',
         ];
     }
@@ -69,7 +78,7 @@ class Member extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['member_number', 'name_hanzi', 'name_pinyin', 'name_indonesian', 'status', 'monthly_dues_amount', 'group_id'])
+            ->logOnly(['member_number', 'name_hanzi', 'name_pinyin', 'name_indonesian', 'status', 'monthly_dues_amount', 'group_id', 'address', 'latitude', 'longitude'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -88,6 +97,74 @@ class Member extends Model
     public function duesRecords(): HasMany
     {
         return $this->hasMany(DuesRecord::class);
+    }
+
+    /**
+     * Riwayat kunjungan lapangan (terbaru dulu).
+     *
+     * @return HasMany<MemberVisit, $this>
+     */
+    public function visits(): HasMany
+    {
+        return $this->hasMany(MemberVisit::class)->latest('visited_at');
+    }
+
+    /**
+     * Petugas yang terakhir memperbarui titik lokasi.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function locationUpdatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'location_updated_by');
+    }
+
+    public function hasLocation(): bool
+    {
+        return $this->latitude !== null && $this->longitude !== null;
+    }
+
+    /**
+     * Lokasi dianggap lengkap bila sudah ada titik GPS dan foto rumah — syarat
+     * kebijakan "wajib sekali" saat kunjungan pertama.
+     */
+    public function hasCompleteLocation(): bool
+    {
+        return $this->hasLocation() && filled($this->house_photo_path);
+    }
+
+    /**
+     * Tautan Google Maps untuk melihat titik rumah. Null bila belum ada titik.
+     */
+    public function googleMapsUrl(): ?string
+    {
+        if (! $this->hasLocation()) {
+            return null;
+        }
+
+        return 'https://www.google.com/maps/search/?api=1&query='.$this->latitude.','.$this->longitude;
+    }
+
+    /**
+     * Tautan navigasi (rute) Google Maps menuju rumah anggota.
+     */
+    public function googleMapsDirectionsUrl(): ?string
+    {
+        if (! $this->hasLocation()) {
+            return null;
+        }
+
+        return 'https://www.google.com/maps/dir/?api=1&destination='.$this->latitude.','.$this->longitude;
+    }
+
+    /**
+     * URL foto rumah terkini pada disk publik. Null bila belum ada.
+     */
+    public function housePhotoUrl(): ?string
+    {
+        return filled($this->house_photo_path)
+            ? Storage::disk('public')->url($this->house_photo_path)
+            : null;
     }
 
     /**

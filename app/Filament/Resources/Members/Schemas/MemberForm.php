@@ -7,6 +7,7 @@ use App\Enums\MemberStatus;
 use App\Support\PinyinConverter;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -16,6 +17,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
 
 class MemberForm
 {
@@ -88,6 +90,51 @@ class MemberForm
                                 ->columnSpanFull(),
                         ]),
                     ]),
+
+                Section::make('Lokasi & Rumah')
+                    ->description('Titik GPS & foto rumah agar penagih penerus tetap bisa menemukan rumah anggota.')
+                    ->schema([
+                        Grid::make(2)->schema([
+                            TextInput::make('latitude')
+                                ->label('Latitude')
+                                ->numeric()
+                                ->step('any')
+                                ->minValue(-90)
+                                ->maxValue(90)
+                                ->columnSpan(1),
+                            TextInput::make('longitude')
+                                ->label('Longitude')
+                                ->numeric()
+                                ->step('any')
+                                ->minValue(-180)
+                                ->maxValue(180)
+                                ->columnSpan(1),
+                        ]),
+                        Placeholder::make('maps_link')
+                            ->label('Peta')
+                            ->content(function (Get $get): HtmlString {
+                                $lat = $get('latitude');
+                                $lng = $get('longitude');
+
+                                if (blank($lat) || blank($lng)) {
+                                    return new HtmlString('<span style="color:#a8a29e">Belum ada titik lokasi.</span>');
+                                }
+
+                                $url = 'https://www.google.com/maps/search/?api=1&query='.$lat.','.$lng;
+
+                                return new HtmlString('<a href="'.e($url).'" target="_blank" rel="noopener" style="color:#2563eb;font-weight:600">Buka di Google Maps ↗</a>');
+                            }),
+                        FileUpload::make('house_photo_path')
+                            ->label('Foto Rumah')
+                            ->image()
+                            ->disk('public')
+                            ->directory('member-houses')
+                            ->visibility('public')
+                            ->imageEditor()
+                            ->maxSize(8192)
+                            ->columnSpanFull(),
+                    ])
+                    ->collapsed(),
 
                 Section::make('Iuran')
                     ->schema([

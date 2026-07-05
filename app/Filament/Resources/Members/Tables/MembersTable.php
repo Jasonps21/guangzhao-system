@@ -3,16 +3,20 @@
 namespace App\Filament\Resources\Members\Tables;
 
 use App\Enums\MemberStatus;
+use App\Models\Member;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class MembersTable
 {
@@ -45,6 +49,13 @@ class MembersTable
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge(),
+                IconColumn::make('lokasi')
+                    ->label('Lokasi')
+                    ->state(fn (Member $record): bool => $record->hasCompleteLocation())
+                    ->boolean()
+                    ->tooltip(fn (Member $record): string => $record->hasCompleteLocation()
+                        ? 'Titik & foto rumah lengkap'
+                        : 'Titik/foto rumah belum lengkap'),
                 TextColumn::make('phone')
                     ->label('Telepon')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -58,9 +69,23 @@ class MembersTable
                     ->relationship('group', 'name')
                     ->searchable()
                     ->preload(),
+                Filter::make('missing_location')
+                    ->label('Belum ada titik lokasi')
+                    ->query(fn (Builder $query): Builder => $query->where(
+                        fn (Builder $q) => $q->whereNull('latitude')->orWhereNull('longitude')
+                    )),
+                Filter::make('missing_house_photo')
+                    ->label('Belum ada foto rumah')
+                    ->query(fn (Builder $query): Builder => $query->whereNull('house_photo_path')),
                 TrashedFilter::make(),
             ])
             ->recordActions([
+                Action::make('maps')
+                    ->label('Peta')
+                    ->icon('heroicon-o-map-pin')
+                    ->url(fn (Member $record): ?string => $record->googleMapsDirectionsUrl())
+                    ->openUrlInNewTab()
+                    ->visible(fn (Member $record): bool => $record->hasLocation()),
                 Action::make('card')
                     ->label('Kartu')
                     ->icon('heroicon-o-identification')

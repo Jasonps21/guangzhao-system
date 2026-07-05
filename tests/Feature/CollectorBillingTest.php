@@ -23,7 +23,7 @@ class CollectorBillingTest extends TestCase
         $group = MemberGroup::factory()->create();
         $collector->groups()->attach($group);
 
-        $member = Member::factory()->active()->inGroup($group)->create();
+        $member = Member::factory()->active()->withLocation()->inGroup($group)->create();
         $record = DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->create([
             'member_id' => $member->id,
         ]);
@@ -44,7 +44,7 @@ class CollectorBillingTest extends TestCase
         $group = MemberGroup::factory()->create();
         $collector->groups()->attach($group);
 
-        $member = Member::factory()->active()->inGroup($group)->create();
+        $member = Member::factory()->active()->withLocation()->inGroup($group)->create();
         DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->create([
             'member_id' => $member->id,
         ]);
@@ -71,7 +71,7 @@ class CollectorBillingTest extends TestCase
         $collector->groups()->attach($group);
 
         // Tagihan terbit Juni; anggota ingin lunas penuh hingga Desember.
-        $member = Member::factory()->active()->inGroup($group)->create([
+        $member = Member::factory()->active()->withLocation()->inGroup($group)->create([
             'monthly_dues_amount' => 30000,
         ]);
         $juneRecord = DuesRecord::factory()->forPeriod(2026, 6)->create([
@@ -119,7 +119,7 @@ class CollectorBillingTest extends TestCase
         $group = MemberGroup::factory()->create();
         $collector->groups()->attach($group);
 
-        $member = Member::factory()->active()->inGroup($group)->create(['monthly_dues_amount' => 30000]);
+        $member = Member::factory()->active()->withLocation()->inGroup($group)->create(['monthly_dues_amount' => 30000]);
         $record = DuesRecord::factory()->forPeriod(2026, 6)->create([
             'member_id' => $member->id,
             'amount_due' => 30000,

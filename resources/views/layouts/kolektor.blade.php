@@ -144,6 +144,66 @@
         .alert { background: #fee2e2; color: #991b1b; padding: .85rem 1rem; border-radius: .6rem; margin-bottom: 1rem; }
         .summary { color: #57534e; margin: .25rem 0 1rem; }
         h2 { font-size: 1.1rem; }
+
+        /* Kartu penagihan + lokasi rumah */
+        .card-wrap {
+            background: #fff;
+            border-radius: .9rem;
+            margin-bottom: .85rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,.08);
+            overflow: hidden;
+        }
+        .card-wrap .card { margin-bottom: 0; box-shadow: none; border-radius: 0; padding-bottom: .65rem; }
+        .btn-need-loc {
+            background: #f97316; color: #fff; border: 0; border-radius: .75rem;
+            padding: 1rem 1.1rem; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+            min-width: 120px; white-space: nowrap;
+        }
+        .btn-need-loc:active { background: #ea580c; }
+        .loc-bar {
+            display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+            padding: .6rem 1.15rem 1rem; border-top: 1px dashed #e7e5e4;
+        }
+        .loc-ok { color: #166534; font-size: .92rem; font-weight: 600; }
+        .loc-warn { color: #b45309; font-size: .92rem; font-weight: 600; }
+        .loc-link {
+            color: #1d4ed8; font-weight: 600; text-decoration: none; font-size: .92rem;
+            padding: .35rem .6rem; background: #eff6ff; border-radius: .5rem;
+        }
+        .loc-btn {
+            margin-left: auto; background: #f5f5f4; color: #44403c; border: 1px solid #e7e5e4;
+            border-radius: .5rem; padding: .4rem .75rem; font-size: .9rem; font-weight: 600; cursor: pointer;
+        }
+        .loc-btn + .loc-btn { margin-left: .4rem; }
+        .loc-btn:active { background: #e7e5e4; }
+
+        /* Panel kunjungan */
+        .visit-panel { padding: .35rem 1.15rem 1.15rem; background: #fafaf9; border-top: 1px solid #f0efee; }
+        .visit-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-top: .6rem; }
+        .btn-gps {
+            background: #0f766e; color: #fff; border: 0; border-radius: .6rem;
+            padding: .7rem 1rem; font-size: 1rem; font-weight: 700; cursor: pointer;
+        }
+        .btn-gps:active { background: #115e59; }
+        .gps-ok { color: #166534; font-weight: 600; font-size: .92rem; }
+        .visit-label { display: block; margin: .8rem 0 .3rem; font-weight: 600; font-size: .95rem; }
+        .visit-input {
+            width: 100%; padding: .7rem .85rem; font-size: 1rem;
+            border: 1px solid #d6d3d1; border-radius: .55rem; background: #fff;
+        }
+        .visit-preview { margin-top: .6rem; max-width: 100%; max-height: 220px; border-radius: .6rem; display: block; }
+        .visit-hint { color: #78716c; font-size: .9rem; margin-top: .35rem; }
+        .visit-err { color: #b91c1c; font-size: .9rem; margin-top: .35rem; font-weight: 600; }
+        .visit-actions { display: flex; gap: .6rem; margin-top: 1rem; }
+        .btn-save-visit {
+            flex: 1; background: #16a34a; color: #fff; border: 0; border-radius: .6rem;
+            padding: .9rem; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+        }
+        .btn-save-visit:active { background: #15803d; }
+        .btn-cancel-visit {
+            background: #e7e5e4; color: #44403c; border: 0; border-radius: .6rem;
+            padding: .9rem 1.2rem; font-size: 1.05rem; font-weight: 600; cursor: pointer;
+        }
     </style>
     @livewireStyles
 </head>

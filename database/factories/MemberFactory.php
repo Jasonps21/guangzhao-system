@@ -70,4 +70,18 @@ class MemberFactory extends Factory
     {
         return $this->state(fn (array $attributes) => ['group_id' => $group->id]);
     }
+
+    /**
+     * Anggota dengan lokasi rumah lengkap (titik GPS + foto) — memenuhi syarat
+     * penagihan lapangan.
+     */
+    public function withLocation(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'latitude' => -5.1476000,
+            'longitude' => 119.4327000,
+            'house_photo_path' => 'member-houses/example.jpg',
+            'location_updated_at' => now(),
+        ]);
+    }
 }
