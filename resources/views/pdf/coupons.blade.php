@@ -65,7 +65,7 @@
             height: 40mm;
             margin-top: -20mm;
             margin-left: -20mm;
-            opacity: 0.08;
+            opacity: 0.16;
             z-index: 0;
         }
 
