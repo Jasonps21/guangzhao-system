@@ -1,137 +1,241 @@
 <div>
-    <div class="topbar">
-        <h1>{{ $group->name }}</h1>
-        <a href="{{ route('kolektor.groups') }}" wire:navigate>‹ Kembali</a>
-    </div>
+    <header class="appbar">
+        <div class="appbar__inner">
+            <a href="{{ route('kolektor.groups') }}" class="icon-btn" wire:navigate aria-label="Kembali ke daftar kelompok">
+                <svg class="ico" aria-hidden="true"><use href="#i-arrow-left"/></svg>
+            </a>
+            <div class="appbar__title">
+                <span class="appbar__eyebrow">Penagihan</span>
+                <h1 class="appbar__name">{{ $group->name }}</h1>
+            </div>
+        </div>
+    </header>
 
-    <div class="container">
-        <p class="summary">Periode <strong>{{ $period }}</strong></p>
+    <div class="shell">
+        <div class="period">
+            <div>
+                <span class="period__label">Periode</span>
+                <div class="period__value">{{ $period }}</div>
+            </div>
+            <span class="period__who">{{ $records->count() }} anggota</span>
+        </div>
 
         @if (session('billing-message'))
-            <div class="flash">{{ session('billing-message') }}</div>
+            <div class="flash">
+                <svg class="ico" aria-hidden="true"><use href="#i-info"/></svg>
+                <span>{{ session('billing-message') }}</span>
+            </div>
         @endif
 
-        @forelse ($records as $record)
-            @php($member = $record->member)
-            <div class="card-wrap" wire:key="dues-{{ $record->id }}">
-                <div class="card">
-                    <div>
-                        <div class="name">{{ $member->displayName() }}</div>
-                        <div class="meta">
-                            {{ $member->member_number }} ·
-                            Rp {{ number_format($record->amount_due, 0, ',', '.') }}
-                        </div>
-                    </div>
+        <div class="list">
+            @forelse ($records as $record)
+                @php($member = $record->member)
+                <article class="shellcard rise" wire:key="dues-{{ $record->id }}">
+                    <div class="shellcard__core">
+                        <div class="row__head">
+                            <span class="row__index" aria-hidden="true">{{ $loop->iteration }}</span>
 
-                    @if ($record->status === \App\Enums\DuesStatus::Lunas)
-                        <span class="badge-lunas">✓ Lunas</span>
-                    @elseif ($record->status === \App\Enums\DuesStatus::MenungguPersetujuan)
-                        <span class="badge-pending">⏳ Menunggu Persetujuan</span>
-                    @elseif (! $member->hasCompleteLocation())
-                        <button type="button" class="btn-need-loc" wire:click="openVisit({{ $member->id }})">
-                            📍 Lengkapi Lokasi
-                        </button>
-                    @else
-                        <div class="pay-actions">
-                            <button
-                                type="button"
-                                class="btn-lunas"
-                                wire:click="markPaid({{ $record->id }})"
-                                wire:confirm="Tandai LUNAS {{ $period }}?&#10;&#10;{{ $member->displayName() }}&#10;Rp {{ number_format($record->amount_due, 0, ',', '.') }}"
-                                wire:loading.attr="disabled"
-                                wire:target="markPaid({{ $record->id }})"
-                            >LUNAS</button>
-
-                            <div class="pay-range">
-                                <span class="pay-range-label">Bayar s/d</span>
-                                <select wire:model="payUntil.{{ $record->member_id }}" aria-label="Bayar sampai bulan">
-                                    @foreach ($monthOptions as $value => $label)
-                                        <option value="{{ $value }}">{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                                <button
-                                    type="button"
-                                    class="btn-range"
-                                    wire:click="payThrough({{ $record->member_id }})"
-                                    wire:confirm="Catat pembayaran {{ $member->displayName() }} dari {{ $period }} sampai bulan terpilih?&#10;&#10;Lebih dari 1 bulan akan menunggu persetujuan admin."
-                                    wire:loading.attr="disabled"
-                                    wire:target="payThrough({{ $record->member_id }})"
-                                >Lunasi</button>
+                            <div class="row__title">
+                                <h2 class="row__name">{{ $member->displayName() }}</h2>
+                                <p class="row__meta">
+                                    <span>{{ $member->member_number }}</span>
+                                    <span class="sep"></span>
+                                    <b>Rp {{ number_format($record->amount_due, 0, ',', '.') }}</b>
+                                </p>
                             </div>
-                        </div>
-                    @endif
-                </div>
 
-                {{-- Baris lokasi rumah --}}
-                <div class="loc-bar">
-                    @if ($member->hasCompleteLocation())
-                        <span class="loc-ok">📍 Lokasi lengkap</span>
-                        @if ($member->googleMapsDirectionsUrl())
-                            <a class="loc-link" href="{{ $member->googleMapsDirectionsUrl() }}" target="_blank" rel="noopener">Navigasi ⇢</a>
-                        @endif
-                        <button type="button" class="loc-btn" wire:click="confirmLocation({{ $member->id }})"
-                            wire:loading.attr="disabled" wire:target="confirmLocation({{ $member->id }})">Masih sama</button>
-                        <button type="button" class="loc-btn" wire:click="openVisit({{ $member->id }})">Perbarui</button>
-                    @else
-                        <span class="loc-warn">⚠️ Titik/foto rumah belum ada</span>
-                        <button type="button" class="loc-btn" wire:click="openVisit({{ $member->id }})">Isi sekarang</button>
-                    @endif
-                </div>
-
-                {{-- Panel kunjungan (GPS + foto + alamat) --}}
-                @if ($activeMemberId === $member->id)
-                    <div class="visit-panel">
-                        <div class="visit-row">
-                            <button type="button" class="btn-gps"
-                                x-data
-                                @click="
-                                    if (! navigator.geolocation) { alert('Perangkat tidak mendukung GPS.'); return; }
-                                    $el.textContent = 'Mengambil…';
-                                    navigator.geolocation.getCurrentPosition(
-                                        (p) => { $wire.set('lat', p.coords.latitude); $wire.set('lng', p.coords.longitude); $el.textContent = '📍 Ambil ulang titik'; },
-                                        (e) => { alert('Gagal ambil lokasi: ' + e.message); $el.textContent = '📍 Ambil titik GPS'; },
-                                        { enableHighAccuracy: true, timeout: 15000 }
-                                    );
-                                ">📍 Ambil titik GPS</button>
-                            @if ($lat && $lng)
-                                <span class="gps-ok">✓ {{ number_format($lat, 6) }}, {{ number_format($lng, 6) }}</span>
+                            @if ($record->status === \App\Enums\DuesStatus::Lunas)
+                                <span class="pill pill--ok">
+                                    <svg class="ico ico--sm" aria-hidden="true"><use href="#i-check"/></svg>
+                                    Lunas
+                                </span>
+                            @elseif ($record->status === \App\Enums\DuesStatus::MenungguPersetujuan)
+                                <span class="pill pill--wait">
+                                    <svg class="ico ico--sm" aria-hidden="true"><use href="#i-clock"/></svg>
+                                    Menunggu
+                                </span>
                             @endif
                         </div>
-                        @error('lat') <div class="visit-err">{{ $message }}</div> @enderror
 
-                        <label class="visit-label">Foto rumah</label>
-                        <input type="file" accept="image/*" capture="environment" wire:model="photo">
-                        <div wire:loading wire:target="photo" class="visit-hint">Mengunggah foto…</div>
-                        @error('photo') <div class="visit-err">{{ $message }}</div> @enderror
-                        @if ($photo)
-                            <img src="{{ $photo->temporaryUrl() }}" class="visit-preview" alt="Pratinjau foto rumah">
-                        @elseif ($member->housePhotoUrl())
-                            <img src="{{ $member->housePhotoUrl() }}" class="visit-preview" alt="Foto rumah tersimpan">
+                        {{-- Baris lokasi rumah. Bila belum lengkap, alasannya cukup
+                             ditempel di atas tombol aksi agar kartu tidak berlapis-lapis. --}}
+                        @if ($member->hasCompleteLocation())
+                            <div class="locbar">
+                                <div class="locbar__status locbar__status--ok">
+                                    <svg class="ico ico--sm" aria-hidden="true"><use href="#i-pin"/></svg>
+                                    <span>Lokasi lengkap</span>
+                                    @if ($member->googleMapsDirectionsUrl())
+                                        <a class="locbar__nav" href="{{ $member->googleMapsDirectionsUrl() }}" target="_blank" rel="noopener">
+                                            Navigasi
+                                            <svg class="ico ico--sm" aria-hidden="true"><use href="#i-arrow-ur"/></svg>
+                                        </a>
+                                    @endif
+                                </div>
+                                <div class="locbar__actions">
+                                    <button type="button" class="chip chip--confirm"
+                                        wire:click="confirmLocation({{ $member->id }})"
+                                        wire:confirm="Rumah {{ $member->displayName() }} masih di titik yang sama?"
+                                        wire:loading.attr="disabled" wire:target="confirmLocation({{ $member->id }})">
+                                        <svg class="ico ico--sm" aria-hidden="true"><use href="#i-check"/></svg>
+                                        Masih sama
+                                    </button>
+                                    <button type="button" class="chip chip--neutral" wire:click="openVisit({{ $member->id }})">
+                                        Ubah lokasi
+                                    </button>
+                                </div>
+                            </div>
                         @endif
 
-                        <label class="visit-label">Alamat (perbarui bila berubah)</label>
-                        <textarea wire:model="houseAddress" rows="2" class="visit-input"></textarea>
+                        {{-- Zona aksi utama --}}
+                        @if ($record->status === \App\Enums\DuesStatus::Lunas)
+                            @if ($record->canBeUndoneBy(auth()->user()))
+                                <div class="actions">
+                                    <button
+                                        type="button"
+                                        class="btn btn--undo"
+                                        wire:click="undoPayment({{ $record->id }})"
+                                        wire:confirm="Batalkan pembayaran ini?&#10;&#10;{{ $member->displayName() }}&#10;Tagihan kembali BELUM BAYAR."
+                                        wire:loading.attr="disabled"
+                                        wire:target="undoPayment({{ $record->id }})"
+                                    >
+                                        <svg class="ico ico--sm" aria-hidden="true"><use href="#i-undo"/></svg>
+                                        Batalkan pembayaran
+                                    </button>
+                                </div>
+                            @endif
+                        @elseif ($record->status === \App\Enums\DuesStatus::MenungguPersetujuan)
+                            {{-- Menunggu admin — tidak ada aksi kolektor. --}}
+                        @elseif (! $member->hasCompleteLocation())
+                            <div class="actions">
+                                <p class="actions__note">
+                                    <svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>
+                                    Titik &amp; foto rumah belum ada
+                                </p>
+                                <button type="button" class="btn btn--locate" wire:click="openVisit({{ $member->id }})">
+                                    <span class="btn__label">Lengkapi Lokasi</span>
+                                    <span class="btn__ico"><svg aria-hidden="true"><use href="#i-pin"/></svg></span>
+                                </button>
+                            </div>
+                        @else
+                            <div class="actions">
+                                <button
+                                    type="button"
+                                    class="btn btn--pay"
+                                    wire:click="markPaid({{ $record->id }})"
+                                    wire:confirm="Tandai LUNAS {{ $period }}?&#10;&#10;{{ $member->displayName() }}&#10;Rp {{ number_format($record->amount_due, 0, ',', '.') }}"
+                                    wire:loading.attr="disabled"
+                                    wire:target="markPaid({{ $record->id }})"
+                                >
+                                    <span class="btn__label">Tandai Lunas</span>
+                                    <span class="btn__ico"><svg aria-hidden="true"><use href="#i-check"/></svg></span>
+                                </button>
 
-                        <label class="visit-label">Hasil kunjungan</label>
-                        <select wire:model="outcome" class="visit-input">
-                            @foreach ($outcomeOptions as $opt)
-                                <option value="{{ $opt->value }}">{{ $opt->getLabel() }}</option>
-                            @endforeach
-                        </select>
+                                <div class="range">
+                                    <span class="range__label">Bayar s/d</span>
+                                    <select class="range__select" wire:model="payUntil.{{ $record->member_id }}" aria-label="Bayar sampai bulan">
+                                        @foreach ($monthOptions as $value => $label)
+                                            <option value="{{ $value }}">{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    <button
+                                        type="button"
+                                        class="range__go"
+                                        wire:click="payThrough({{ $record->member_id }})"
+                                        wire:confirm="Catat pembayaran {{ $member->displayName() }} dari {{ $period }} sampai bulan terpilih?&#10;&#10;Lebih dari 1 bulan akan menunggu persetujuan admin."
+                                        wire:loading.attr="disabled"
+                                        wire:target="payThrough({{ $record->member_id }})"
+                                    >Lunasi</button>
+                                </div>
+                            </div>
+                        @endif
 
-                        <label class="visit-label">Catatan / patokan (opsional)</label>
-                        <input type="text" wire:model="note" class="visit-input" placeholder="mis. pagar hijau, sebelah warung">
+                        {{-- Panel kunjungan (GPS + foto + alamat) --}}
+                        @if ($activeMemberId === $member->id)
+                            <div class="visit">
+                                <span class="visit__legend">Kunjungan Rumah</span>
 
-                        <div class="visit-actions">
-                            <button type="button" class="btn-save-visit" wire:click="saveVisit"
-                                wire:loading.attr="disabled" wire:target="saveVisit,photo">Simpan lokasi</button>
-                            <button type="button" class="btn-cancel-visit" wire:click="closeVisit">Batal</button>
-                        </div>
+                                <div class="gps-row">
+                                    <button type="button" class="btn btn--gps"
+                                        x-data
+                                        @click="
+                                            if (! navigator.geolocation) { alert('Perangkat tidak mendukung GPS.'); return; }
+                                            $refs.gpsText.textContent = 'Mengambil…';
+                                            navigator.geolocation.getCurrentPosition(
+                                                (p) => { $wire.set('lat', p.coords.latitude); $wire.set('lng', p.coords.longitude); $refs.gpsText.textContent = 'Ambil ulang titik'; },
+                                                (e) => { alert('Gagal ambil lokasi: ' + e.message); $refs.gpsText.textContent = 'Ambil titik GPS'; },
+                                                { enableHighAccuracy: true, timeout: 15000 }
+                                            );
+                                        ">
+                                        <svg class="ico ico--sm" aria-hidden="true"><use href="#i-crosshair"/></svg>
+                                        <span x-ref="gpsText">Ambil titik GPS</span>
+                                    </button>
+                                    @if ($lat && $lng)
+                                        <span class="gps-ok">
+                                            <svg class="ico ico--sm" aria-hidden="true"><use href="#i-check"/></svg>
+                                            {{ number_format($lat, 6) }}, {{ number_format($lng, 6) }}
+                                        </span>
+                                    @endif
+                                </div>
+                                @error('lat')
+                                    <p class="err"><svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>{{ $message }}</p>
+                                @enderror
+
+                                <div class="field">
+                                    <span class="field__label">Foto rumah</span>
+                                    <label class="filepick">
+                                        <span class="filepick__ico">
+                                            <svg class="ico ico--sm" aria-hidden="true"><use href="#i-camera"/></svg>
+                                        </span>
+                                        <span>{{ $photo ? 'Foto siap — ketuk untuk ganti' : 'Ambil atau pilih foto rumah' }}</span>
+                                        <input type="file" accept="image/*" capture="environment" wire:model="photo">
+                                    </label>
+                                    <p wire:loading wire:target="photo" class="hint">Mengunggah foto…</p>
+                                    @error('photo')
+                                        <p class="err"><svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>{{ $message }}</p>
+                                    @enderror
+                                    @if ($photo)
+                                        <img src="{{ $photo->temporaryUrl() }}" class="preview" alt="Pratinjau foto rumah">
+                                    @elseif ($member->housePhotoUrl())
+                                        <img src="{{ $member->housePhotoUrl() }}" class="preview" alt="Foto rumah tersimpan">
+                                    @endif
+                                </div>
+
+                                <div class="field">
+                                    <label class="field__label" for="addr-{{ $member->id }}">Alamat (perbarui bila berubah)</label>
+                                    <textarea id="addr-{{ $member->id }}" class="input" wire:model="houseAddress" rows="2"></textarea>
+                                </div>
+
+                                <div class="field">
+                                    <label class="field__label" for="outcome-{{ $member->id }}">Hasil kunjungan</label>
+                                    <select id="outcome-{{ $member->id }}" class="input" wire:model="outcome">
+                                        @foreach ($outcomeOptions as $opt)
+                                            <option value="{{ $opt->value }}">{{ $opt->getLabel() }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="field">
+                                    <label class="field__label" for="note-{{ $member->id }}">Catatan / patokan (opsional)</label>
+                                    <input id="note-{{ $member->id }}" type="text" class="input" wire:model="note" placeholder="mis. pagar hijau, sebelah warung">
+                                </div>
+
+                                <div class="visit__actions">
+                                    <button type="button" class="btn btn--save" wire:click="saveVisit"
+                                        wire:loading.attr="disabled" wire:target="saveVisit,photo">Simpan lokasi</button>
+                                    <button type="button" class="btn btn--ghost" wire:click="closeVisit">Batal</button>
+                                </div>
+                            </div>
+                        @endif
                     </div>
-                @endif
-            </div>
-        @empty
-            <div class="empty">Belum ada tagihan untuk periode ini. Hubungi admin untuk generate tagihan.</div>
-        @endforelse
+                </article>
+            @empty
+                <div class="empty">
+                    <div class="empty__ico">
+                        <svg class="ico ico--lg" aria-hidden="true"><use href="#i-inbox"/></svg>
+                    </div>
+                    Belum ada tagihan untuk periode ini.<br>Hubungi admin untuk generate tagihan.
+                </div>
+            @endforelse
+        </div>
     </div>
 </div>
