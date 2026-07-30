@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\DuesCategory;
+use App\Enums\Gender;
 use App\Enums\MemberStatus;
 use App\Models\Member;
 use App\Models\MemberGroup;
@@ -27,6 +28,7 @@ class MemberFactory extends Factory
             'name_hanzi' => null,
             'name_pinyin' => null,
             'name_indonesian' => fake()->name(),
+            'gender' => fake()->optional()->randomElement(Gender::cases()),
             'address' => fake()->optional()->address(),
             'phone' => fake()->optional()->phoneNumber(),
             'photo_path' => null,

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\MemberStatus;
 use App\Models\Member;
 use App\Models\MemberGroup;
+use App\Models\OrganizationSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -48,6 +49,36 @@ class MemberListPdfTest extends TestCase
 
         $response->assertOk();
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_member_list_shows_database_no_urut_not_a_running_counter(): void
+    {
+        $group = MemberGroup::factory()->create(['name' => 'klp1']);
+
+        // Members whose no_urut is not a plain 1,2,3 sequence — the list must
+        // print the stored no_urut (to match the coupons), not the row index.
+        foreach ([5, 12, 27] as $number) {
+            Member::factory()->active()->create([
+                'group_id' => $group->id,
+                'no_urut' => $number,
+            ]);
+        }
+
+        $groups = MemberGroup::query()
+            ->whereKey($group->id)
+            ->with(['members' => fn ($q) => $q->orderByRaw('no_urut IS NULL, no_urut')])
+            ->get();
+
+        $html = view('pdf.member-list', [
+            'groups' => $groups,
+            'organization' => OrganizationSetting::current(),
+            'logo' => null,
+            'printedAt' => '01 Januari 2026 00:00',
+        ])->render();
+
+        preg_match_all('/<td class="col-no">(\d+)<\/td>/', $html, $matches);
+
+        $this->assertSame(['5', '12', '27'], $matches[1]);
     }
 
     public function test_member_list_route_is_behind_auth(): void

@@ -5,11 +5,13 @@ namespace App\Support;
 use App\Enums\CollectionMethod;
 use App\Enums\DuesStatus;
 use App\Enums\SubmissionStatus;
+use App\Models\DuesReceipt;
 use App\Models\DuesRecord;
 use App\Models\Member;
 use App\Models\PaymentSubmission;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class PaymentService
@@ -23,6 +25,19 @@ class PaymentService
     }
 
     /**
+     * Batalkan pembayaran lapangan yang baru saja salah dicatat kolektor.
+     * Ditolak bila bukan miliknya, sudah lewat tenggang, atau bagian setoran.
+     */
+    public function undoFieldPayment(DuesRecord $record, User $by): bool
+    {
+        if (! $record->canBeUndoneBy($by)) {
+            return false;
+        }
+
+        return $record->revertToUnpaid();
+    }
+
+    /**
      * Pay a contiguous range of months for one member in a single transaction.
      * Creates any missing dues rows using the member's current monthly amount. (§6.4)
      *
@@ -30,11 +45,101 @@ class PaymentService
      */
     public function payRange(Member $member, int $year, int $fromMonth, int $toMonth, User $by, CollectionMethod $method): int
     {
+        return $this->payMonths($member, $year, $fromMonth, $toMonth, $by, $method)->count();
+    }
+
+    /**
+     * Sama seperti {@see self::payRange()}, tetapi sekalian menerbitkan nota
+     * TANDA TERIMA yang bisa dicetak dan dicetak ulang. Hanya bulan yang benar
+     * benar baru dilunasi yang masuk hitungan nota.
+     *
+     * @param  float|null  $totalReceived  Uang yang benar-benar diterima di meja.
+     *                                     Boleh berbeda dari jumlah tagihannya —
+     *                                     yang tercetak di nota adalah angka ini.
+     *                                     Null berarti pakai jumlah tagihan.
+     * @param  string|null  $receivedByName  Nama penerima uang bila bukan petugas
+     *                                       yang menginput (mis. uang dititipkan).
+     * @return DuesReceipt|null Null bila tak ada bulan baru yang dilunasi.
+     */
+    public function payRangeAndIssueReceipt(
+        Member $member,
+        int $year,
+        int $fromMonth,
+        int $toMonth,
+        User $by,
+        CollectionMethod $method,
+        ?float $totalReceived = null,
+        ?string $receivedByName = null,
+    ): ?DuesReceipt {
+        return DB::transaction(function () use ($member, $year, $fromMonth, $toMonth, $by, $method, $totalReceived, $receivedByName): ?DuesReceipt {
+            $paid = $this->payMonths($member, $year, $fromMonth, $toMonth, $by, $method);
+
+            if ($paid->isEmpty()) {
+                return null;
+            }
+
+            return DuesReceipt::create([
+                'member_id' => $member->getKey(),
+                'period_year' => $year,
+                'from_month' => (int) $paid->min('period_month'),
+                'to_month' => (int) $paid->max('period_month'),
+                'months_count' => $paid->count(),
+                'total_amount' => $totalReceived ?? $paid->sum(fn (DuesRecord $record): float => (float) $record->amount_paid),
+                'issued_at' => CarbonImmutable::now(),
+                'issued_by' => $by->getKey(),
+                'received_by_name' => $receivedByName,
+            ]);
+        });
+    }
+
+    /**
+     * Perkiraan tagihan untuk rentang bulan tersebut — dipakai sebagai angka
+     * awal kolom "Total Uang Diterima" sebelum petugas menyesuaikannya. Bulan
+     * yang sudah lunas tidak ikut dihitung, dan bulan yang barisnya belum ada
+     * memakai iuran bulanan anggota saat ini.
+     */
+    public function outstandingTotal(Member $member, int $year, int $fromMonth, int $toMonth): float
+    {
+        [$fromMonth, $toMonth] = [min($fromMonth, $toMonth), max($fromMonth, $toMonth)];
+
+        $existing = $member->duesRecords()
+            ->where('period_year', $year)
+            ->whereBetween('period_month', [$fromMonth, $toMonth])
+            ->get()
+            ->keyBy('period_month');
+
+        $total = 0.0;
+
+        for ($month = $fromMonth; $month <= $toMonth; $month++) {
+            $record = $existing->get($month);
+
+            if ($record === null) {
+                $total += (float) $member->monthly_dues_amount;
+
+                continue;
+            }
+
+            if ($record->status !== DuesStatus::Lunas) {
+                $total += (float) $record->amount_due;
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * Lunasi rentang bulan dalam satu transaksi, membuat baris tagihan yang
+     * belum ada memakai iuran bulanan anggota saat ini.
+     *
+     * @return Collection<int, DuesRecord> Tagihan yang berubah menjadi lunas kali ini.
+     */
+    private function payMonths(Member $member, int $year, int $fromMonth, int $toMonth, User $by, CollectionMethod $method): Collection
+    {
         [$fromMonth, $toMonth] = [min($fromMonth, $toMonth), max($fromMonth, $toMonth)];
         $paidAt = CarbonImmutable::now();
 
-        return DB::transaction(function () use ($member, $year, $fromMonth, $toMonth, $by, $method, $paidAt): int {
-            $count = 0;
+        return DB::transaction(function () use ($member, $year, $fromMonth, $toMonth, $by, $method, $paidAt): Collection {
+            $paid = collect();
 
             for ($month = $fromMonth; $month <= $toMonth; $month++) {
                 $record = $member->duesRecords()->firstOrCreate(
@@ -43,11 +148,11 @@ class PaymentService
                 );
 
                 if ($record->markPaid($by, $method, $paidAt)) {
-                    $count++;
+                    $paid->push($record);
                 }
             }
 
-            return $count;
+            return $paid;
         });
     }
 

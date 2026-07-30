@@ -6,6 +6,7 @@ use App\Filament\Resources\Members\Pages\CreateMember;
 use App\Filament\Resources\Members\Pages\EditMember;
 use App\Filament\Resources\Members\Pages\ListMembers;
 use App\Filament\Resources\Members\RelationManagers\DuesRecordsRelationManager;
+use App\Filament\Resources\Members\RelationManagers\FamilyRelationshipsRelationManager;
 use App\Filament\Resources\Members\RelationManagers\VisitsRelationManager;
 use App\Filament\Resources\Members\Schemas\MemberForm;
 use App\Filament\Resources\Members\Tables\MembersTable;
@@ -51,6 +52,7 @@ class MemberResource extends Resource
     {
         return [
             DuesRecordsRelationManager::class,
+            FamilyRelationshipsRelationManager::class,
             VisitsRelationManager::class,
         ];
     }

@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Enums\MemberStatus;
+use App\Models\CondolencePayment;
+use App\Models\DuesReceipt;
 use App\Models\DuesRecord;
 use App\Models\Member;
 use App\Models\MemberGroup;
 use App\Models\OrganizationSetting;
+use App\Models\SocialFundRecord;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -117,6 +120,72 @@ class PdfController extends Controller
     }
 
     /**
+     * Nota uang duka — TANDA TERIMA yang ditandatangani keluarga penerima.
+     */
+    public function condolenceReceipt(CondolencePayment $payment): Response
+    {
+        return $this->condolenceNote($payment, 'terima');
+    }
+
+    /**
+     * Nota uang duka — TANDA PEMBERIAN yang ditandatangani pengurus (福利部).
+     */
+    public function condolenceHandover(CondolencePayment $payment): Response
+    {
+        return $this->condolenceNote($payment, 'pemberian');
+    }
+
+    /**
+     * Nota TANDA TERIMA dana sosial (sumbangan masuk / bantuan keluar).
+     */
+    public function socialFundReceipt(SocialFundRecord $record): Response
+    {
+        $organization = OrganizationSetting::current();
+
+        $pdf = Pdf::loadView('pdf.social-fund-receipt', [
+            'record' => $record,
+            'organization' => $organization,
+            'logo' => $this->logoDataUri($organization),
+        ])->setPaper('a5', 'landscape');
+
+        return $pdf->stream('tanda-terima-'.$record->receipt_number.'.pdf');
+    }
+
+    /**
+     * Nota TANDA TERIMA pembayaran iuran beberapa bulan sekaligus.
+     */
+    public function duesReceipt(DuesReceipt $receipt): Response
+    {
+        $organization = OrganizationSetting::current();
+
+        $pdf = Pdf::loadView('pdf.dues-receipt', [
+            'receipt' => $receipt->load(['member', 'issuedBy']),
+            'organization' => $organization,
+            'logo' => $this->logoDataUri($organization),
+        ])->setPaper('a5', 'landscape');
+
+        return $pdf->stream('tanda-terima-iuran-'.$receipt->receipt_number.'.pdf');
+    }
+
+    /**
+     * Kedua nota uang duka dicetak dari satu template yang sama; hanya bunyi
+     * kalimat dan blok tanda tangannya yang berbeda. (§H)
+     */
+    private function condolenceNote(CondolencePayment $payment, string $variant): Response
+    {
+        $organization = OrganizationSetting::current();
+
+        $pdf = Pdf::loadView('pdf.condolence-note', [
+            'payment' => $payment,
+            'organization' => $organization,
+            'logo' => $this->logoDataUri($organization),
+            'variant' => $variant,
+        ])->setPaper('a5', 'landscape');
+
+        return $pdf->stream('uang-duka-'.$variant.'-'.$payment->receipt_number.'.pdf');
+    }
+
+    /**
      * Logo perkumpulan sebagai data URI base64 agar selalu ter-embed di PDF
      * tanpa bergantung pada akses file/remote DomPDF. Memakai logo yang diunggah
      * admin bila ada; jika tidak, jatuh ke logo bawaan. Null bila keduanya kosong.
@@ -151,8 +220,8 @@ class PdfController extends Controller
             'start_url' => route('kolektor.groups'),
             'scope' => '/kolektor',
             'display' => 'standalone',
-            'background_color' => '#f5f5f4',
-            'theme_color' => '#b45309',
+            'background_color' => '#f4f2ef',
+            'theme_color' => '#f4f2ef',
             'icons' => [],
         ]);
     }

@@ -36,6 +36,14 @@ class KonfigurasiOrganisasi extends Page
      */
     public ?array $data = [];
 
+    /**
+     * Pengaturan organisasi hanya untuk Super Admin, sama seperti pengelolaan pengguna.
+     */
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->isSuperAdmin() ?? false;
+    }
+
     public function mount(): void
     {
         $this->form->fill($this->getRecord()->attributesToArray());

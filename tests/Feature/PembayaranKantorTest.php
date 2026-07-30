@@ -22,14 +22,15 @@ class PembayaranKantorTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(PembayaranKantor::class)
-            ->fillForm([
+            ->callAction('bayarIuran', data: [
                 'member_id' => $member->id,
                 'year' => 2026,
                 'from_month' => 1,
                 'to_month' => 6,
+                'total_amount' => 150000,
+                'received_by_name' => $admin->name,
             ])
-            ->call('save')
-            ->assertHasNoFormErrors()
+            ->assertHasNoActionErrors()
             ->assertNotified();
 
         $paid = $member->duesRecords()->where('status', DuesStatus::Lunas)->get();
@@ -45,15 +46,30 @@ class PembayaranKantorTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(PembayaranKantor::class)
-            ->fillForm([
+            ->callAction('bayarIuran', data: [
                 'member_id' => $member->id,
                 'year' => 2026,
                 'from_month' => 6,
                 'to_month' => 3,
+                'total_amount' => 150000,
+                'received_by_name' => $admin->name,
             ])
-            ->call('save')
-            ->assertHasFormErrors(['to_month']);
+            ->assertHasActionErrors(['to_month']);
 
         $this->assertDatabaseCount('dues_records', 0);
+    }
+
+    /**
+     * Halaman terbuka tanpa formulir: yang tampil hanya arsip nota, dan
+     * pembayaran baru dimulai dari tombol di header.
+     */
+    public function test_the_payment_form_is_behind_a_header_action(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        Livewire::actingAs($admin)
+            ->test(PembayaranKantor::class)
+            ->assertOk()
+            ->assertActionExists('bayarIuran');
     }
 }

@@ -86,7 +86,27 @@ class Billing extends Component
             return;
         }
 
-        app(PaymentService::class)->pay($record, Auth::user(), CollectionMethod::Lapangan);
+        if (app(PaymentService::class)->pay($record, Auth::user(), CollectionMethod::Lapangan)) {
+            session()->flash('billing-message', $record->member->displayName().' ditandai LUNAS untuk '.$this->period().'. Salah tekan? Tekan "Batalkan pembayaran" pada baris itu.');
+        }
+    }
+
+    /**
+     * Batalkan pembayaran yang baru saja salah ditandai kolektor sendiri,
+     * selama masih dalam tenggang. Lewat itu, koreksi harus lewat admin.
+     */
+    public function undoPayment(int $duesRecordId): void
+    {
+        $record = DuesRecord::query()
+            ->with('member')
+            ->where('id', $duesRecordId)
+            ->forPeriod($this->year, $this->month)
+            ->whereHas('member', fn ($q) => $q->where('group_id', $this->group->getKey()))
+            ->firstOrFail();
+
+        session()->flash('billing-message', app(PaymentService::class)->undoFieldPayment($record, Auth::user())
+            ? 'Pembayaran '.$record->member->displayName().' dibatalkan. Tagihan kembali BELUM BAYAR.'
+            : 'Pembayaran ini sudah tidak bisa dibatalkan sendiri. Hubungi admin untuk mengoreksi.');
     }
 
     /**
@@ -118,7 +138,7 @@ class Billing extends Component
             );
 
             app(PaymentService::class)->pay($record, Auth::user(), CollectionMethod::Lapangan);
-            session()->flash('billing-message', $member->displayName().' ditandai LUNAS untuk '.$this->period());
+            session()->flash('billing-message', $member->displayName().' ditandai LUNAS untuk '.$this->period().'. Salah tekan? Tekan "Batalkan pembayaran" pada baris itu.');
 
             return;
         }
@@ -253,9 +273,11 @@ class Billing extends Component
             ->sortBy(fn (DuesRecord $r) => $r->member->displayName())
             ->values();
 
-        // Default pelunasan: sampai Desember (skenario bayar setahun penuh di muka).
+        // Default pelunasan: bulan berjalan saja. Memilih bulan yang lebih jauh
+        // harus jadi tindakan sadar kolektor — kalau default-nya Desember, satu
+        // salah tekan "Lunasi" langsung mencatat setoran banyak bulan.
         foreach ($records as $record) {
-            $this->payUntil[$record->member_id] ??= 12;
+            $this->payUntil[$record->member_id] ??= $this->month;
         }
 
         $activeMember = $this->activeMemberId !== null

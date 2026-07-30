@@ -30,3 +30,6 @@ Thumbs.db
 *.xlsx
 *.xls
 *.csv
+
+# WSL/Windows metadata junk
+*:Zone.Identifier

@@ -57,7 +57,7 @@
         /* Slightly taller than the text so "Keterangan" is still writable by hand,
            but tight enough to avoid wasting blank paper. */
         table.list td { font-size: 8.5pt; height: 6mm; }
-        .col-no { width: 9mm; text-align: center; }
+        .col-no { width: 12mm; text-align: center; }
         .col-hanzi { width: 30mm; }
         .col-nama { width: 48mm; }
         .col-telp { width: 32mm; }
@@ -106,7 +106,7 @@
             <table class="list">
                 <thead>
                     <tr>
-                        <th class="col-no">No</th>
+                        <th class="col-no">No. Urut</th>
                         <th class="col-hanzi">Nama Hanzi</th>
                         <th class="col-nama">Nama Indonesia</th>
                         <th>Alamat</th>
@@ -115,9 +115,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse ($group->members as $index => $member)
+                    @forelse ($group->members as $member)
                         <tr>
-                            <td class="col-no">{{ $index + 1 }}</td>
+                            <td class="col-no">{{ $member->no_urut ?? '-' }}</td>
                             <td class="hanzi">{{ $member->name_hanzi }}</td>
                             <td>{{ $member->name_indonesian }}</td>
                             <td>{{ $member->address }}</td>

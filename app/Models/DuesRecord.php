@@ -19,6 +19,13 @@ class DuesRecord extends Model
     /** @use HasFactory<DuesRecordFactory> */
     use HasFactory, LogsActivity;
 
+    /**
+     * Berapa lama kolektor masih boleh membatalkan sendiri pembayaran lapangan
+     * yang salah tekan, dihitung sejak dicatat. Lewat dari ini, hanya admin yang
+     * boleh mengoreksi supaya catatan uang tidak bisa diubah diam-diam.
+     */
+    public const UNDO_WINDOW_MINUTES = 10;
+
     protected $fillable = [
         'member_id',
         'period_year',
@@ -91,6 +98,44 @@ class DuesRecord extends Model
             'paid_at' => $paidAt ?? CarbonImmutable::now(),
             'recorded_by' => $by->getKey(),
             'collection_method' => $method,
+        ])->save();
+
+        return true;
+    }
+
+    /**
+     * Bolehkah kolektor ini membatalkan sendiri pembayaran tadi?
+     *
+     * Hanya untuk pembayaran lapangan yang dia catat sendiri, masih dalam
+     * tenggang {@see self::UNDO_WINDOW_MINUTES} menit, dan bukan bagian dari
+     * setoran multi-bulan (itu ranah persetujuan admin).
+     */
+    public function canBeUndoneBy(User $user): bool
+    {
+        return $this->status === DuesStatus::Lunas
+            && $this->collection_method === CollectionMethod::Lapangan
+            && $this->recorded_by === $user->getKey()
+            && $this->submission_id === null
+            && $this->updated_at !== null
+            && $this->updated_at->greaterThanOrEqualTo(CarbonImmutable::now()->subMinutes(self::UNDO_WINDOW_MINUTES));
+    }
+
+    /**
+     * Batalkan pembayaran lapangan yang salah tekan: tagihan kembali BELUM BAYAR.
+     * Perubahan tetap tercatat di log aktivitas.
+     */
+    public function revertToUnpaid(): bool
+    {
+        if ($this->status !== DuesStatus::Lunas || $this->submission_id !== null) {
+            return false;
+        }
+
+        $this->forceFill([
+            'status' => DuesStatus::BelumBayar,
+            'amount_paid' => null,
+            'paid_at' => null,
+            'recorded_by' => null,
+            'collection_method' => null,
         ])->save();
 
         return true;

@@ -19,7 +19,7 @@ class KonfigurasiOrganisasiTest extends TestCase
     {
         parent::setUp();
 
-        $this->actingAs(User::factory()->admin()->create());
+        $this->actingAs(User::factory()->superAdmin()->create());
     }
 
     public function test_page_loads_with_current_settings(): void

@@ -24,7 +24,7 @@
         @page { margin: 9mm 8mm 6mm 8mm; }
         * { box-sizing: border-box; }
         body {
-            font-family: 'DejaVu Sans', sans-serif;
+            font-family: 'Times New Roman', serif;
             margin: 0;
             color: #000;
             font-size: 9pt;
@@ -53,6 +53,10 @@
             overflow: hidden;
             padding: 2mm 3.5mm;
         }
+        /* Header + the four flowing data rows (Nama…Bulan) live here. A fixed
+           height with overflow:hidden caps how far long names/addresses can push
+           down, so they can never collide with the pinned bottom block. */
+        .body-top { height: 46mm; overflow: hidden; }
         .empty-cell { border: 1px solid #111; }
 
         /* Faint centered logo watermark behind each coupon's content. Low
@@ -65,122 +69,214 @@
             height: 40mm;
             margin-top: -20mm;
             margin-left: -20mm;
-            opacity: 0.16;
+            opacity: 0.22;
             z-index: 0;
         }
 
         /* Header — blue, centered. Org title uses a serif bold-italic face to
            echo the decorative Word heading; contact line is underlined. */
-        .head { text-align: center; line-height: 1.05; color: #1d1de0; }
+        .head { text-align: center; line-height: 0.9; color: #0000cc; }
         .head .org {
             font-family: 'Times New Roman', serif;
-            font-size: 10pt;
+            font-size: 12pt;
             font-weight: bold;
             font-style: italic;
             text-decoration: underline;
             letter-spacing: .2pt;
         }
+        /* Title hanzi: enlarged and faux-bolded via overprint (WenQuanYi is a
+           single weight, so font-weight:bold alone does not thicken it). The
+           .hzb span is centered as an inline-block; .over overlaps the base
+           glyphs nudged 0.4pt right. No line-height:0 needed here since the
+           hanzi sits alone on its line. */
         .head .hanzi {
-            font-family: 'WenQuanYi', 'DejaVu Sans', sans-serif;
-            font-size: 9pt;
+            font-family: 'WenQuanYi', serif;
+            font-size: 13pt;
             font-weight: bold;
             margin: 0.2mm 0;
         }
+        .head .hanzi .hzb { position: relative; display: inline-block; }
+        .head .hanzi .over { position: absolute; left: 0.4pt; top: 0; }
+        /* Contact line — same decorative serif face as the org title
+           ("perkumpulan"): bold italic underlined. nowrap + a small size keep
+           the long address/phone string on a single line. */
         .head .contact {
-            font-size: 6.5pt;
+            font-family: 'Times New Roman', serif;
+            font-size: 10pt;
             font-weight: bold;
+            font-style: italic;
             text-decoration: underline;
+            letter-spacing: -.1pt;
             white-space: nowrap;
         }
 
-        /* Member data rows — bold, labels uppercase with the colon aligned. */
-        table.info { width: 100%; border-collapse: collapse; font-weight: bold; margin-top: 0.8mm; }
-        table.info td { vertical-align: top; padding: 0.2mm 0; }
-        table.info .label { width: 17mm; }
+        /* Member data rows — bold, larger font. Rows are packed tightly
+           (minimal padding) so the six data lines sit close together and use
+           up the empty space in the coupon. */
+        table.info { width: 100%; border-collapse: collapse; font-weight: bold; font-size: 14pt; margin-top: 2mm; line-height: 1.05; }
+        table.info td { vertical-align: top; padding: 0 0; }
+        table.info .label { width: 20mm; }
         table.info .sep { width: 2.5mm; }
-        .hz { font-family: 'WenQuanYi', 'DejaVu Sans', sans-serif; }
+        /* Member-name hanzi: enlarged to 11pt and faux-bolded. WenQuanYi ships a
+           single weight, so font-weight:bold does not thicken it in DomPDF.
+           Instead we overprint a second copy (.over) nudged right by 0.4pt to
+           fatten the strokes. line-height:0 stops the taller 11pt glyph from
+           inflating the row's line box, so the hanzi shares one baseline with
+           the 9pt label and latin/pinyin name (all "sama rata"). Because that
+           collapses the line box, the absolutely-positioned .over must be pushed
+           back down (top) to re-overlap the base glyph. That top offset is tuned
+           empirically and is coupled to BOTH this font-size AND the body font's
+           line metrics (it was 11.06pt under DejaVu Sans, 8.55pt under Times New
+           Roman). If you change either, retune: render the coupon PDF and adjust
+           top until the two 11pt draws share one baseline (Δy ≈ 0). */
+        .hz {
+            position: relative;
+            font-family: 'WenQuanYi', 'DejaVu Sans', sans-serif;
+            font-size: 14pt;
+            line-height: 0;
+        }
+        /* Pinyin (e.g. "Huang Ying Qiang") shown small and de-emphasised so the
+           Indonesian name stays the prominent one on the Nama line. */
+        .pinyin { font-size: 9pt; font-weight: normal; font-style: italic; }
         .note { font-weight: bold; font-style: italic; }
         .amount { font-weight: bold; }
         .month { font-weight: bold; color: #d00000; }
 
-        .reg { font-weight: bold; margin-top: 0.8mm; }
-
-        /* Klompok / no. urut pinned to the lower-left. */
-        table.foot { border-collapse: collapse; font-weight: bold; margin-top: 0.6mm; }
-        table.foot td { vertical-align: top; padding: 0.2mm 0; }
-        table.foot .label { width: 17mm; }
+        /* Kelompok / No. Urut pinned to the bottom-left corner (mirroring the
+           signatures on the right) so they are ALWAYS printed in full, no matter
+           how many lines the Nama / Alamat above wrapped to. Before this they
+           flowed after the info block and got clipped off the box on long data. */
+        .foot-box { position: absolute; left: 3.5mm; bottom: 2mm; }
+        table.foot { border-collapse: collapse; font-weight: bold; font-size: 14pt; margin-top: 0; line-height: 1.05; }
+        table.foot td { vertical-align: top; padding: 0 0; }
+        table.foot .label { width: 20mm; }
         table.foot .sep { width: 2.5mm; }
 
         /* Ketua / Bendahara signatures on the right, as in the Word template. */
-        .sign-box { position: absolute; right: 3mm; bottom: 3mm; }
-        table.sign { border-collapse: collapse; font-size: 7.5pt; font-weight: bold; }
-        table.sign td { width: 25mm; text-align: center; vertical-align: top; padding: 0 1mm; white-space: nowrap; }
+        /* Ketua / Bendahara pinned to the bottom-right corner. Kept compact
+           (small font, tight columns) so it stays in the corner and does not
+           overlap the Kelompok / No. Urut data on the left. */
+        .sign-box { position: absolute; right: 2mm; bottom: 2mm; }
+        table.sign { border-collapse: collapse; font-size: 8.5pt; font-weight: bold; }
+        table.sign td { width: 20mm; text-align: center; vertical-align: top; padding: 0 0.5mm; white-space: nowrap; }
         .sign .gap { height: 7mm; }
     </style>
 </head>
 <body>
 @php
-    $chunks = $records->chunk(10);
+    /*
+     * Imposisi "cut & stack" per kelompok. Seluruh lembar dicetak lalu seluruh
+     * tumpukan dipotong menjadi 10 tumpukan (satu per posisi kupon); bila tiap
+     * tumpukan disusun sesuai urutan baca, setiap tumpukan sudah urut No. Urut.
+     * Untuk satu kelompok berisi N anggota di P = ceil(N/10) lembar, kupon pada
+     * slot ke-s (0-based, urutan baca 0..9) di lembar ke-p berisi anggota
+     * indeks s*P + p. Slot yang melewati N dirender sebagai kupon kosong.
+     */
+    $pages = collect();
+
+    foreach ($records->groupBy(fn ($record) => $record->member->group_id) as $groupRecords) {
+        $items = $groupRecords->values();
+        $sheetCount = (int) ceil($items->count() / 10);
+
+        for ($sheet = 0; $sheet < $sheetCount; $sheet++) {
+            $slots = [];
+
+            for ($slot = 0; $slot < 10; $slot++) {
+                $slots[] = $items->get($slot * $sheetCount + $sheet);
+            }
+
+            $pages->push(collect($slots));
+        }
+    }
 @endphp
 
-@forelse ($chunks as $page)
+@forelse ($pages as $page)
     <div class="sheet">
         <table class="grid">
             @php $rows = $page->chunk(2); @endphp
             @foreach ($rows as $pair)
                 <tr>
                     @foreach ($pair as $record)
-                        @php $member = $record->member; @endphp
+                        @if ($record === null)
+                            <td class="coupon empty-cell"></td>
+                        @else
+                        @php
+                            $member = $record->member;
+
+                            /*
+                             * Distribute the leftover vertical space evenly between the four
+                             * data rows so short-data coupons fill the box instead of leaving
+                             * a gap above the pinned Kelompok / No. Urut. We estimate how many
+                             * wrapped lines each field needs (value column fits ~26 latin chars
+                             * at 14pt; a hanzi glyph ≈ 2 of those), then spread the remaining
+                             * millimetres as equal padding under each row. Long data yields
+                             * ~0 gap and stays tight; .body-top clips any overflow as a guard.
+                             */
+                            $valueChars = 26;
+                            $nameLatin = ($member->name_indonesian ?: $member->name_pinyin) ?? '';
+                            $namaWidth = mb_strlen($member->name_hanzi ?? '') * 2 + mb_strlen($nameLatin)
+                                + ($member->name_indonesian && $member->name_pinyin ? mb_strlen($member->name_pinyin) + 3 : 0);
+                            $namaLines = max(1, (int) ceil($namaWidth / $valueChars));
+
+                            $alamatText = $member->address ? \Illuminate\Support\Str::limit($member->address, 48) : '-';
+                            $alamatWidth = mb_strlen($alamatText) + ($member->bill_at_home ? 15 : 0);
+                            $alamatLines = max(1, (int) ceil($alamatWidth / $valueChars));
+
+                            $usedMm = ($namaLines + $alamatLines + 2) * 5.2;
+                            $rowGapMm = round(max(0.0, 31 - $usedMm) / 4, 2);
+                        @endphp
                         <td class="coupon">
                             <div class="inner">
                                 @if (! empty($logo))
                                     <img class="watermark" src="{{ $logo }}" alt="">
                                 @endif
+                                <div class="body-top">
                                 <div class="head">
                                     <div class="org">{{ $organization->name }}</div>
-                                    <div class="hanzi">{{ $organization->name_hanzi }}</div>
+                                    <div class="hanzi"><span class="hzb">{{ $organization->name_hanzi }}<span class="over">{{ $organization->name_hanzi }}</span></span></div>
                                     @if ($organization->contact_line)
                                         <div class="contact">{{ $organization->contact_line }}</div>
                                     @endif
                                 </div>
 
                                 <table class="info">
-                                    <tr>
-                                        <td class="label">NAMA</td>
+                                    <tr style="padding-bottom: {{ $rowGapMm }}mm;">
+                                        <td class="label" style="padding-bottom: {{ $rowGapMm }}mm;">Nama</td>
                                         <td class="sep">:</td>
-                                        <td>@if ($member->name_hanzi)<span class="hz">{{ $member->name_hanzi }}</span> @endif{{ $member->name_pinyin ?: $member->name_indonesian }}</td>
+                                        <td style="padding-bottom: {{ $rowGapMm }}mm;">@if ($member->name_hanzi)<span class="hz">{{ $member->name_hanzi }}</span> @endif{{ $member->name_indonesian ?: $member->name_pinyin }}@if ($member->name_indonesian && $member->name_pinyin)<span class="pinyin"> ({{ $member->name_pinyin }})</span>@endif</td>
                                     </tr>
                                     <tr>
-                                        <td class="label">ALAMAT</td>
+                                        <td class="label" style="padding-bottom: {{ $rowGapMm }}mm;">Alamat</td>
                                         <td class="sep">:</td>
-                                        <td>{{ $member->address ? \Illuminate\Support\Str::limit($member->address, 60) : '-' }}@if ($member->bill_at_home) <span class="note">(tagih dirumah)</span>@endif</td>
+                                        <td style="padding-bottom: {{ $rowGapMm }}mm;">{{ $member->address ? \Illuminate\Support\Str::limit($member->address, 48) : '-' }}@if ($member->bill_at_home) <span class="note">(tagih dirumah)</span>@endif</td>
                                     </tr>
                                     <tr>
-                                        <td class="label">YURAN</td>
+                                        <td class="label" style="padding-bottom: {{ $rowGapMm }}mm;">Iuran</td>
                                         <td class="sep">:</td>
-                                        <td><span class="amount">Rp.{{ number_format($record->amount_due, 0, ',', '.') }},-</span></td>
+                                        <td style="padding-bottom: {{ $rowGapMm }}mm;"><span class="amount">Rp.{{ number_format($record->amount_due, 0, ',', '.') }},-</span></td>
                                     </tr>
                                     <tr>
-                                        <td class="label">BULAN</td>
+                                        <td class="label">Bulan</td>
                                         <td class="sep">:</td>
                                         <td><span class="month">{{ $period }}</span></td>
                                     </tr>
                                 </table>
+                                </div>
 
-                                <div class="reg">REG NO.</div>
-
-                                <table class="foot">
-                                    <tr>
-                                        <td class="label">Klompok</td>
-                                        <td class="sep">:</td>
-                                        <td>{{ $member->group?->name ?? '-' }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="label">no. urut</td>
-                                        <td class="sep">:</td>
-                                        <td>{{ $member->no_urut ?? '-' }}</td>
-                                    </tr>
-                                </table>
+                                <div class="foot-box">
+                                    <table class="foot">
+                                        <tr>
+                                            <td class="label">Kelompok</td>
+                                            <td class="sep">:</td>
+                                            <td>{{ $member->group?->name ?? '-' }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="label">No. Urut</td>
+                                            <td class="sep">:</td>
+                                            <td>{{ $member->no_urut ?? '-' }}</td>
+                                        </tr>
+                                    </table>
+                                </div>
 
                                 <div class="sign-box">
                                     <table class="sign">
@@ -200,6 +296,7 @@
                                 </div>
                             </div>
                         </td>
+                        @endif
                     @endforeach
                     @if ($pair->count() === 1)
                         <td class="coupon empty-cell"></td>

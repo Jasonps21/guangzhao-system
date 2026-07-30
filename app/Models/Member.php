@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\DuesCategory;
+use App\Enums\Gender;
 use App\Enums\MemberStatus;
 use App\Support\PinyinConverter;
 use Database\Factories\MemberFactory;
@@ -26,6 +27,7 @@ class Member extends Model
         'name_hanzi',
         'name_pinyin',
         'name_indonesian',
+        'gender',
         'address',
         'latitude',
         'longitude',
@@ -50,6 +52,7 @@ class Member extends Model
         return [
             'dues_category' => DuesCategory::class,
             'status' => MemberStatus::class,
+            'gender' => Gender::class,
             'bill_at_home' => 'boolean',
             'monthly_dues_amount' => 'decimal:2',
             'status_changed_at' => 'datetime',
@@ -107,6 +110,17 @@ class Member extends Model
     public function visits(): HasMany
     {
         return $this->hasMany(MemberVisit::class)->latest('visited_at');
+    }
+
+    /**
+     * Hubungan kekeluargaan yang dimiliki anggota ini (sisi pemilik). Baris
+     * kebalikannya disimpan otomatis, jadi relasi selalu terlihat dari kedua sisi.
+     *
+     * @return HasMany<MemberRelationship, $this>
+     */
+    public function familyRelationships(): HasMany
+    {
+        return $this->hasMany(MemberRelationship::class, 'member_id');
     }
 
     /**

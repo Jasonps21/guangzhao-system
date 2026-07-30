@@ -71,6 +71,116 @@ class CouponPdfTest extends TestCase
         $this->assertStringStartsWith('%PDF', $response->getContent());
     }
 
+    public function test_coupons_are_laid_out_for_cut_and_stack_per_group(): void
+    {
+        $group = MemberGroup::factory()->create(['name' => 'klp1']);
+
+        // 12 members numbered 1..12 → P = ceil(12/10) = 2 sheets. Slot s of sheet
+        // p holds member index s*P + p, so the reading order across both sheets is
+        // 1,3,5,7,9,11 (sheet 1) then 2,4,6,8,10,12 (sheet 2), with blanks after.
+        foreach (range(1, 12) as $number) {
+            $member = Member::factory()->active()->create([
+                'group_id' => $group->id,
+                'no_urut' => $number,
+            ]);
+            DuesRecord::factory()->create([
+                'member_id' => $member->id,
+                'period_year' => 2025,
+                'period_month' => 12,
+            ]);
+        }
+
+        $records = DuesRecord::query()
+            ->with(['member.group'])
+            ->forPeriod(2025, 12)
+            ->get()
+            ->sortBy(fn (DuesRecord $r) => $r->member->no_urut)
+            ->values();
+
+        $html = view('pdf.coupons', [
+            'records' => $records,
+            'period' => 'Desember 2025',
+            'organization' => OrganizationSetting::current(),
+            'logo' => null,
+        ])->render();
+
+        // Pull the No. Urut of every coupon in render (reading) order.
+        preg_match_all('/No\. Urut<\/td>\s*<td class="sep">:<\/td>\s*<td>(\d+)<\/td>/', $html, $matches);
+
+        $this->assertSame(
+            ['1', '3', '5', '7', '9', '11', '2', '4', '6', '8', '10', '12'],
+            $matches[1],
+        );
+    }
+
+    public function test_coupon_name_shows_indonesian_prominently_with_small_pinyin(): void
+    {
+        $member = Member::factory()->active()->create([
+            'name_hanzi' => '黄英強',
+            'name_pinyin' => 'Huang Ying Qiang',
+            'name_indonesian' => 'Budi Santoso',
+        ]);
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+        ]);
+
+        $records = DuesRecord::query()
+            ->with(['member.group'])
+            ->forPeriod(2025, 12)
+            ->get();
+
+        $html = view('pdf.coupons', [
+            'records' => $records,
+            'period' => 'Desember 2025',
+            'organization' => OrganizationSetting::current(),
+            'logo' => null,
+        ])->render();
+
+        // Indonesian name is the prominent (main) text on the Nama line...
+        $this->assertStringContainsString('Budi Santoso', $html);
+        // ...and the pinyin is rendered small inside a .pinyin span.
+        $this->assertStringContainsString('<span class="pinyin"> (Huang Ying Qiang)</span>', $html);
+    }
+
+    public function test_coupon_pins_kelompok_and_no_urut_outside_the_flowing_block(): void
+    {
+        // Long name + address make the flowing rows (Nama…Bulan) wrap to several
+        // lines. Kelompok / No. Urut must live in the pinned .foot-box, not the
+        // clipped .body-top, so they always print in full. (Guards the fix for
+        // No. Urut getting cut off the box on members with lots of data.)
+        $group = MemberGroup::factory()->create(['name' => 'Kelompok 8']);
+        $member = Member::factory()->active()->create([
+            'group_id' => $group->id,
+            'no_urut' => 61,
+            'name_hanzi' => '吴素兰',
+            'name_indonesian' => 'Lestiana Gosali Go',
+            'address' => 'jl. Metro T.B Ruko Somba Opu AA/ 5 Blok C No 12 Makassar',
+        ]);
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+        ]);
+
+        $records = DuesRecord::query()->with(['member.group'])->forPeriod(2025, 12)->get();
+
+        $html = view('pdf.coupons', [
+            'records' => $records,
+            'period' => 'Desember 2025',
+            'organization' => OrganizationSetting::current(),
+            'logo' => null,
+        ])->render();
+
+        $footBox = mb_substr($html, mb_strpos($html, 'class="foot-box"'));
+        $footBox = mb_substr($footBox, 0, mb_strpos($footBox, '</div>'));
+
+        $this->assertStringContainsString('Kelompok', $footBox);
+        $this->assertStringContainsString('No. Urut', $footBox);
+        $this->assertStringContainsString('61', $footBox);
+    }
+
     public function test_coupon_embeds_uploaded_logo_when_present(): void
     {
         Storage::fake('public');
