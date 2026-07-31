@@ -1,12 +1,23 @@
 <?php
 
 use App\Http\Controllers\PdfController;
+use App\Livewire\Auth\Login as LoginGate;
 use App\Livewire\Kolektor\Billing;
 use App\Livewire\Kolektor\GroupList;
-use App\Livewire\Kolektor\Login;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => redirect('/admin'));
+Route::get('/', fn () => redirect()->route('login'));
+
+/*
+ * Gerbang masuk tunggal untuk semua peran. (§D)
+ *
+ * Sebelumnya panel admin dan mode kolektor punya halaman login sendiri-sendiri,
+ * sehingga pengguna yang salah pintu ditolak walau kata sandinya benar. URL lama
+ * sengaja tetap hidup sebagai pengalihan supaya bookmark & pintasan layar utama
+ * milik kolektor tidak mati.
+ */
+Route::livewire('masuk', LoginGate::class)->name('login');
+Route::redirect('admin/login', '/masuk');
 
 /*
  * Mode Kolektor (lapangan) — halaman PWA sederhana, terpisah dari panel admin. (§D, §6.2)
@@ -14,7 +25,7 @@ Route::get('/', fn () => redirect('/admin'));
 Route::prefix('kolektor')->name('kolektor.')->group(function () {
     Route::get('manifest.webmanifest', [PdfController::class, 'manifest'])->name('manifest');
 
-    Route::livewire('login', Login::class)->name('login');
+    Route::redirect('login', '/masuk')->name('login');
 
     Route::middleware('auth')->group(function () {
         Route::livewire('/', GroupList::class)->name('groups');

@@ -5,7 +5,8 @@
                 <span class="appbar__eyebrow">Kolektor</span>
                 <h1 class="appbar__name">{{ Auth::user()->name }}</h1>
             </div>
-            <button type="button" class="icon-btn" wire:click="logout" aria-label="Keluar">
+            <button type="button" class="icon-btn" wire:click="logout" aria-label="Keluar"
+                wire:confirm="Keluar dari aplikasi?&#10;&#10;Anda harus memasukkan email &amp; kata sandi lagi untuk masuk.">
                 <svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg>
             </button>
         </div>

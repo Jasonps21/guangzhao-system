@@ -9,6 +9,24 @@
                 <h1 class="appbar__name">{{ $group->name }}</h1>
             </div>
         </div>
+
+        {{-- Pencarian ikut menempel: kolektor mencari sambil berdiri di depan pintu,
+             tidak boleh harus menggulir balik ke atas dulu. --}}
+        <div class="searchbar">
+            <svg class="ico searchbar__ico" aria-hidden="true"><use href="#i-search"/></svg>
+            <input
+                type="search"
+                class="searchbar__input"
+                wire:model.live.debounce.400ms="search"
+                placeholder="Cari nama atau alamat…"
+                aria-label="Cari anggota berdasarkan nama, alamat, atau nomor"
+                enterkeyhint="search"
+            >
+            <button type="button" class="searchbar__clear" wire:click="clearSearch"
+                aria-label="Hapus pencarian" @class(['is-hidden' => ! $isSearching])>
+                <svg class="ico ico--sm" aria-hidden="true"><use href="#i-close"/></svg>
+            </button>
+        </div>
     </header>
 
     <div class="shell">
@@ -17,7 +35,13 @@
                 <span class="period__label">Periode</span>
                 <div class="period__value">{{ $period }}</div>
             </div>
-            <span class="period__who">{{ $records->count() }} anggota</span>
+            <span class="period__who">
+                @if ($isSearching)
+                    {{ $records->count() }} dari {{ $totalCount }} anggota
+                @else
+                    {{ $totalCount }} anggota
+                @endif
+            </span>
         </div>
 
         @if (session('billing-message'))
@@ -33,7 +57,7 @@
                 <article class="shellcard rise" wire:key="dues-{{ $record->id }}">
                     <div class="shellcard__core">
                         <div class="row__head">
-                            <span class="row__index" aria-hidden="true">{{ $loop->iteration }}</span>
+                            <span class="row__index" aria-hidden="true">{{ $member->no_urut }}</span>
 
                             <div class="row__title">
                                 <h2 class="row__name">{{ $member->displayName() }}</h2>
@@ -42,6 +66,14 @@
                                     <span class="sep"></span>
                                     <b>Rp {{ number_format($record->amount_due, 0, ',', '.') }}</b>
                                 </p>
+                                {{-- Alamat tampil langsung: inilah yang dipakai kolektor
+                                     untuk menuju rumah, jangan disembunyikan di balik panel. --}}
+                                @if (filled($member->address))
+                                    <p class="row__address">
+                                        <svg class="ico ico--sm" aria-hidden="true"><use href="#i-pin"/></svg>
+                                        <span>{{ $member->address }}</span>
+                                    </p>
+                                @endif
                             </div>
 
                             @if ($record->status === \App\Enums\DuesStatus::Lunas)
@@ -231,9 +263,16 @@
             @empty
                 <div class="empty">
                     <div class="empty__ico">
-                        <svg class="ico ico--lg" aria-hidden="true"><use href="#i-inbox"/></svg>
+                        <svg class="ico ico--lg" aria-hidden="true"><use href="#i-{{ $isSearching ? 'search' : 'inbox' }}"/></svg>
                     </div>
-                    Belum ada tagihan untuk periode ini.<br>Hubungi admin untuk generate tagihan.
+                    @if ($isSearching)
+                        Tidak ada anggota yang cocok dengan<br><strong>“{{ $search }}”</strong>.
+                        <button type="button" class="btn btn--ghost empty__reset" wire:click="clearSearch">
+                            Tampilkan semua anggota
+                        </button>
+                    @else
+                        Belum ada tagihan untuk periode ini.<br>Hubungi admin untuk generate tagihan.
+                    @endif
                 </div>
             @endforelse
         </div>

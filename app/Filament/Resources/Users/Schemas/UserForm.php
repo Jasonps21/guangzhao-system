@@ -10,6 +10,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class UserForm
 {
@@ -22,6 +23,14 @@ class UserForm
                         TextInput::make('name')
                             ->label('Nama')
                             ->required(),
+                        TextInput::make('username')
+                            ->label('Nama Pengguna')
+                            ->required()
+                            ->unique(ignoreRecord: true)
+                            ->maxLength(50)
+                            ->alphaDash()
+                            ->helperText('Dipakai untuk masuk. Buat sependek mungkin — kolektor mengetiknya di HP.')
+                            ->dehydrateStateUsing(fn (?string $state): ?string => Str::lower(trim((string) $state))),
                         TextInput::make('email')
                             ->label('Email')
                             ->email()

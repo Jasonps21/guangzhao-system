@@ -21,9 +21,15 @@ class UsersTable
                     ->label('Nama')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('username')
+                    ->label('Nama Pengguna')
+                    ->searchable()
+                    ->sortable()
+                    ->copyable(),
                 TextColumn::make('email')
                     ->label('Email')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('role')
                     ->label('Peran')
                     ->badge(),

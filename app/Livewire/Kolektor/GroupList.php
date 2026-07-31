@@ -20,7 +20,7 @@ class GroupList extends Component
         request()->session()->invalidate();
         request()->session()->regenerateToken();
 
-        $this->redirectRoute('kolektor.login', navigate: true);
+        $this->redirectRoute('login', navigate: true);
     }
 
     public function render()

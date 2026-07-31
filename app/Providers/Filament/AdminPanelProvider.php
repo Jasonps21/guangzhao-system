@@ -31,7 +31,8 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            // Tanpa ->login(): panel tidak lagi punya halaman masuk sendiri.
+            // Tamu diarahkan ke gerbang tunggal /masuk (route 'login').
             ->colors([
                 'primary' => Color::Amber,
             ])

@@ -32,6 +32,12 @@ class Billing extends Component
     public int $month;
 
     /**
+     * Kata kunci pencarian anggota: nama, nomor anggota, alamat, atau telepon.
+     * Kolektor di depan pintu tidak boleh perlu menggulir 194 kartu satu per satu.
+     */
+    public string $search = '';
+
+    /**
      * Bulan akhir pelunasan yang dipilih kolektor per anggota (member_id => bulan).
      *
      * @var array<int, int>
@@ -260,17 +266,51 @@ class Billing extends Component
         return $member;
     }
 
+    /**
+     * Kosongkan pencarian tanpa perlu menghapus huruf satu per satu.
+     */
+    public function clearSearch(): void
+    {
+        $this->search = '';
+    }
+
+    /**
+     * Pola LIKE untuk pencarian, atau null bila kotak pencarian kosong.
+     * Wildcard bawaan pengguna di-escape supaya "%" tidak mencocokkan semua baris.
+     */
+    protected function searchTerm(): ?string
+    {
+        $term = trim($this->search);
+
+        return $term === '' ? null : '%'.addcslashes($term, '%_\\').'%';
+    }
+
     public function render()
     {
-        $records = DuesRecord::query()
-            ->with('member')
+        $baseQuery = fn () => DuesRecord::query()
             ->forPeriod($this->year, $this->month)
             ->whereHas('member', function ($q): void {
                 $q->where('group_id', $this->group->getKey())
                     ->where('status', MemberStatus::Aktif);
+            });
+
+        $totalCount = $baseQuery()->count();
+
+        $records = $baseQuery()
+            ->with('member')
+            ->when($this->searchTerm(), function ($query, string $term): void {
+                $query->whereHas('member', fn ($q) => $q->where(
+                    fn ($s) => $s->where('name_indonesian', 'like', $term)
+                        ->orWhere('name_pinyin', 'like', $term)
+                        ->orWhere('name_hanzi', 'like', $term)
+                        ->orWhere('member_number', 'like', $term)
+                        ->orWhere('address', 'like', $term)
+                        ->orWhere('phone', 'like', $term)
+                ));
             })
             ->get()
-            ->sortBy(fn (DuesRecord $r) => $r->member->displayName())
+            // Urut nomor anggota, sama dengan urutan buku kupon di tangan kolektor.
+            ->sortBy(fn (DuesRecord $r) => $r->member->no_urut ?? PHP_INT_MAX)
             ->values();
 
         // Default pelunasan: bulan berjalan saja. Memilih bulan yang lebih jauh
@@ -287,6 +327,8 @@ class Billing extends Component
         return view('livewire.kolektor.billing', [
             'records' => $records,
             'activeMember' => $activeMember,
+            'totalCount' => $totalCount,
+            'isSearching' => $this->searchTerm() !== null,
             'period' => Carbon::create($this->year, $this->month, 1)->translatedFormat('F Y'),
             'monthOptions' => $this->monthOptions(),
             'outcomeOptions' => VisitOutcome::cases(),

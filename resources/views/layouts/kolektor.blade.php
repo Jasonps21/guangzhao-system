@@ -167,6 +167,60 @@
 
         .shell { max-width: 34rem; margin: 0 auto; padding: 0 .875rem; }
 
+        /* ── Pencarian anggota ─────────────────────────────────────── */
+        .searchbar {
+            position: relative;
+            display: flex;
+            align-items: center;
+            max-width: 34rem;
+            margin: .625rem auto 0;
+            padding: 0 .375rem 0 1rem;
+            border-radius: var(--r-pill);
+            background: rgba(255, 255, 255, .82);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--hairline);
+            box-shadow: var(--lift-1), var(--inner-hi);
+            transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+        }
+        .searchbar:focus-within {
+            border-color: rgba(163, 84, 13, .45);
+            box-shadow: var(--lift-1), 0 0 0 3.5px rgba(163, 84, 13, .12);
+        }
+        .searchbar__ico { flex: none; color: var(--ink-3); }
+        .searchbar__input {
+            flex: 1;
+            min-width: 0;
+            min-height: 3rem;
+            border: 0;
+            background: transparent;
+            font-family: inherit;
+            font-size: 1.0625rem;
+            color: var(--ink);
+            padding: .5rem .625rem;
+            outline: 0;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        .searchbar__input::placeholder { color: var(--ink-3); }
+        /* Tombol clear bawaan Safari/Chrome digantikan tombol sendiri agar cukup besar. */
+        .searchbar__input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+        .searchbar__clear {
+            flex: none;
+            width: 2.75rem;
+            height: 2.75rem;
+            display: grid;
+            place-items: center;
+            border: 0;
+            border-radius: var(--r-pill);
+            background: var(--surface-2);
+            color: var(--ink-2);
+            cursor: pointer;
+            transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+        }
+        .searchbar__clear:active { transform: scale(.9); }
+        .searchbar__clear.is-hidden { display: none; }
+
         /* ── Ikon garis tipis (sprite) ─────────────────────────────── */
         .ico {
             width: 1.125rem;
@@ -294,6 +348,24 @@
             font-variant-numeric: tabular-nums;
         }
         .row__meta b { color: var(--ink-2); font-weight: 600; }
+        /* Alamat: dua baris cukup, sisanya dipotong agar kartu tidak memanjang. */
+        .row__address {
+            display: flex;
+            align-items: flex-start;
+            gap: .375rem;
+            margin: .4375rem 0 0;
+            font-size: .875rem;
+            line-height: 1.35;
+            color: var(--ink-2);
+        }
+        .row__address .ico { margin-top: .1875rem; color: var(--ink-3); }
+        .row__address span {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
         .sep {
             width: 3px;
             height: 3px;
@@ -692,6 +764,9 @@
             font-size: .9375rem;
             line-height: 1.55;
         }
+        .empty strong { font-weight: 600; color: var(--ink); }
+        /* display:flex (bukan inline-flex) supaya tombol turun ke barisnya sendiri. */
+        .empty__reset { display: flex; width: auto; margin: 1.5rem auto 0; }
         .empty__ico {
             width: 3rem;
             height: 3rem;
@@ -765,6 +840,8 @@
         <symbol id="i-undo" viewBox="0 0 24 24"><path d="M4 9.5h9.5a5 5 0 0 1 0 10H8"/><path d="M4 9.5 8 5.5"/><path d="M4 9.5 8 13.5"/></symbol>
         <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><path d="M12 7.75h.01"/></symbol>
         <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3.5 13h4l1.5 2.5h6L16.5 13h4"/><path d="M5.4 5.6 3.5 13v4.5A1.5 1.5 0 0 0 5 19h14a1.5 1.5 0 0 0 1.5-1.5V13l-1.9-7.4A1.5 1.5 0 0 0 17.15 4.5H6.85A1.5 1.5 0 0 0 5.4 5.6Z"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.75"/><path d="m16 16 4.25 4.25"/></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></symbol>
         <symbol id="i-users" viewBox="0 0 24 24"><path d="M15.5 20v-1.6a3.6 3.6 0 0 0-3.6-3.6H6.6A3.6 3.6 0 0 0 3 18.4V20"/><circle cx="9.25" cy="7.6" r="3.6"/><path d="M21 20v-1.6a3.6 3.6 0 0 0-2.7-3.48"/><path d="M15.75 4.12a3.6 3.6 0 0 1 0 6.97"/></symbol>
     </svg>
 
