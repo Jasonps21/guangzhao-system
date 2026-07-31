@@ -212,16 +212,45 @@
                                     <p class="err"><svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>{{ $message }}</p>
                                 @enderror
 
-                                <div class="field">
+                                {{-- Foto dikecilkan di HP sebelum dikirim. Kompresi di server
+                                     baru bekerja setelah seluruh byte sampai, jadi tidak menolong
+                                     saat sinyal lemah — justru di situ uploadnya gagal. --}}
+                                <div class="field" x-data="housePhotoUpload()">
                                     <span class="field__label">Foto rumah</span>
-                                    <label class="filepick">
+                                    <label class="filepick" :class="busy && 'is-busy'">
                                         <span class="filepick__ico">
                                             <svg class="ico ico--sm" aria-hidden="true"><use href="#i-camera"/></svg>
                                         </span>
-                                        <span>{{ $photo ? 'Foto siap — ketuk untuk ganti' : 'Ambil atau pilih foto rumah' }}</span>
-                                        <input type="file" accept="image/*" capture="environment" wire:model="photo">
+                                        <span x-text="label">{{ $photo ? 'Foto siap — ketuk untuk ganti' : 'Ambil atau pilih foto rumah' }}</span>
+                                        <input type="file" accept="image/*" capture="environment"
+                                            x-ref="input" @change="pick($event)" :disabled="busy">
                                     </label>
-                                    <p wire:loading wire:target="photo" class="hint">Mengunggah foto…</p>
+
+                                    <div class="uploadbar" x-show="busy" x-cloak>
+                                        <div class="uploadbar__track">
+                                            <div class="uploadbar__fill" :style="`width: ${progress}%`"></div>
+                                        </div>
+                                        <p class="hint" x-text="progress < 100 ? `Mengirim foto… ${progress}%` : 'Menyimpan…'"></p>
+                                    </div>
+
+                                    {{-- Kegagalan harus terlihat. Sebelumnya spinner berputar
+                                         selamanya tanpa pesan apa pun ketika koneksi putus. --}}
+                                    <template x-if="failed">
+                                        <div class="uploadfail">
+                                            <p class="err">
+                                                <svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>
+                                                <span x-text="failed"></span>
+                                            </p>
+                                            <div class="uploadfail__actions">
+                                                <button type="button" class="chip chip--neutral" @click="retry()">Coba lagi</button>
+                                                <button type="button" class="chip chip--confirm"
+                                                    wire:click="saveLocationOnly"
+                                                    wire:confirm="Simpan titik GPS saja tanpa foto?&#10;&#10;Foto rumah masih perlu diambil sebelum anggota ini bisa ditandai lunas."
+                                                    wire:loading.attr="disabled" wire:target="saveLocationOnly">Simpan titik saja</button>
+                                            </div>
+                                        </div>
+                                    </template>
+
                                     @error('photo')
                                         <p class="err"><svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>{{ $message }}</p>
                                     @enderror

@@ -221,6 +221,40 @@ class Billing extends Component
     }
 
     /**
+     * Jalan keluar ketika foto gagal terkirim (sinyal putus di lapangan):
+     * simpan titik GPS & alamatnya saja supaya perjalanan kolektor ke rumah itu
+     * tidak terbuang, lalu fotonya menyusul pada kunjungan berikutnya.
+     *
+     * Kebijakan "wajib sekali" tidak dilonggarkan: selama fotonya belum ada,
+     * hasCompleteLocation() tetap false sehingga anggota belum bisa ditandai lunas.
+     */
+    public function saveLocationOnly(): void
+    {
+        $member = $this->resolveGroupMember((int) $this->activeMemberId);
+
+        $this->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'houseAddress' => ['nullable', 'string', 'max:1000'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ], attributes: [
+            'lat' => 'titik GPS',
+            'lng' => 'titik GPS',
+        ]);
+
+        app(VisitService::class)->record($member, Auth::user(), [
+            'latitude' => $this->lat,
+            'longitude' => $this->lng,
+            'address' => $this->houseAddress,
+            'outcome' => $this->outcome,
+            'note' => $this->note,
+        ]);
+
+        session()->flash('billing-message', 'Titik lokasi '.$member->displayName().' tersimpan. Foto rumah masih perlu diambil sebelum anggota ini bisa ditandai lunas.');
+        $this->closeVisit();
+    }
+
+    /**
      * Konfirmasi cepat "lokasi masih sama" tanpa mengambil ulang titik/foto —
      * mencatat kunjungan konfirmasi & memperbarui waktu terakhir diverifikasi.
      */

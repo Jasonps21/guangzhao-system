@@ -135,4 +135,49 @@ class MemberVisitTest extends TestCase
         $this->assertStringContainsString('destination=', (string) $member->googleMapsDirectionsUrl());
         $this->assertNull(Member::factory()->create(['latitude' => null, 'longitude' => null])->googleMapsUrl());
     }
+
+    /**
+     * Jalan keluar saat foto gagal terkirim di lapangan: titik GPS tetap
+     * tersimpan supaya perjalanan kolektor tidak terbuang.
+     */
+    public function test_collector_can_save_the_gps_point_when_the_photo_fails_to_upload(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create();
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('houseAddress', 'Jl. Anuang 25C')
+            ->call('saveLocationOnly')
+            ->assertHasNoErrors()
+            ->assertSet('activeMemberId', null);
+
+        $member->refresh();
+        $this->assertEqualsWithDelta(-5.1476, (float) $member->latitude, 0.0001);
+        $this->assertSame('Jl. Anuang 25C', $member->address);
+        $this->assertSame(1, MemberVisit::query()->count());
+
+        // Kebijakan "wajib sekali" tidak boleh ikut longgar: tanpa foto,
+        // lokasinya tetap dianggap belum lengkap sehingga belum bisa lunas.
+        $this->assertNull($member->house_photo_path);
+        $this->assertFalse($member->hasCompleteLocation());
+    }
+
+    public function test_saving_the_gps_point_alone_still_requires_a_gps_point(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create();
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->call('saveLocationOnly')
+            ->assertHasErrors(['lat', 'lng']);
+
+        $this->assertSame(0, MemberVisit::query()->count());
+    }
 }

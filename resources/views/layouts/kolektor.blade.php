@@ -702,6 +702,35 @@
             background: var(--brand-soft);
             color: var(--brand);
         }
+        [x-cloak] { display: none !important; }
+        .filepick.is-busy { opacity: .6; pointer-events: none; }
+
+        /* Kemajuan pengiriman: angka nyata, bukan pemintal tanpa akhir. */
+        .uploadbar { margin-top: .625rem; }
+        .uploadbar__track {
+            height: .375rem;
+            border-radius: var(--r-pill);
+            background: var(--surface-2);
+            overflow: hidden;
+        }
+        .uploadbar__fill {
+            height: 100%;
+            border-radius: var(--r-pill);
+            background: var(--brand);
+            transition: width .3s var(--ease);
+        }
+        .uploadbar .hint { margin-top: .375rem; font-variant-numeric: tabular-nums; }
+
+        .uploadfail {
+            margin-top: .625rem;
+            padding: .75rem .875rem;
+            border-radius: .875rem;
+            background: var(--danger-soft);
+            border: 1px solid rgba(155, 44, 44, .14);
+        }
+        .uploadfail .err { margin: 0; }
+        .uploadfail__actions { display: flex; gap: .625rem; margin-top: .75rem; }
+
         .preview {
             display: block;
             width: 100%;
@@ -1013,5 +1042,122 @@
 
     {{ $slot }}
     @livewireScripts
+
+    <script>
+        /**
+         * Unggah foto rumah: kecilkan dulu di perangkat, baru kirim.
+         *
+         * Foto HP 4-6 MB butuh menit-menit di sinyal lapangan dan sering putus
+         * di tengah jalan. Setelah diperkecil ke 1280px/JPEG 80 ukurannya tinggal
+         * ratusan KB, sehingga pengiriman selesai dalam hitungan detik.
+         * Kompresi di server tetap ada sebagai jaring pengaman.
+         */
+        function housePhotoUpload() {
+            return {
+                busy: false,
+                progress: 0,
+                failed: null,
+                label: 'Ambil atau pilih foto rumah',
+                lastFile: null,
+                watchdog: null,
+
+                pick(event) {
+                    const file = event.target.files[0];
+                    if (! file) { return; }
+                    this.lastFile = file;
+                    this.send(file);
+                },
+
+                retry() {
+                    if (this.lastFile) { this.send(this.lastFile); }
+                },
+
+                async send(file) {
+                    this.failed = null;
+                    this.busy = true;
+                    this.progress = 0;
+                    this.label = 'Menyiapkan foto…';
+
+                    let payload = file;
+                    try {
+                        payload = await this.shrink(file);
+                    } catch (e) {
+                        // Perangkat lawas tanpa dukungan canvas/bitmap: kirim aslinya.
+                        payload = file;
+                    }
+
+                    this.armWatchdog();
+
+                    this.$wire.upload('photo', payload,
+                        () => {
+                            this.disarmWatchdog();
+                            this.busy = false;
+                            this.progress = 100;
+                            this.label = 'Foto siap — ketuk untuk ganti';
+                        },
+                        () => {
+                            this.disarmWatchdog();
+                            this.busy = false;
+                            this.label = 'Ambil atau pilih foto rumah';
+                            this.failed = 'Foto gagal terkirim. Periksa sinyal, lalu coba lagi.';
+                        },
+                        (event) => {
+                            this.progress = event.detail.progress;
+                            this.armWatchdog();
+                        },
+                    );
+                },
+
+                /**
+                 * Tanpa ini, koneksi yang mati diam-diam membuat indikator berputar
+                 * selamanya: Livewire tidak selalu memanggil callback kesalahan.
+                 */
+                armWatchdog() {
+                    this.disarmWatchdog();
+                    this.watchdog = setTimeout(() => {
+                        if (! this.busy) { return; }
+                        this.busy = false;
+                        this.label = 'Ambil atau pilih foto rumah';
+                        this.failed = 'Pengiriman terhenti, sinyal mungkin terputus. Coba lagi.';
+                        // 30 detik: foto terkompres hanya ratusan KB, jadi selambat
+                        // apa pun sinyalnya seharusnya sudah selesai jauh sebelum ini.
+                    }, 30000);
+                },
+
+                disarmWatchdog() {
+                    if (this.watchdog) { clearTimeout(this.watchdog); this.watchdog = null; }
+                },
+
+                async shrink(file) {
+                    if (! file.type.startsWith('image/') || typeof createImageBitmap !== 'function') {
+                        return file;
+                    }
+
+                    // imageOrientation menghormati EXIF, jadi foto potret tidak terbalik.
+                    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+                    const max = 1280;
+                    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+                    const width = Math.round(bitmap.width * scale);
+                    const height = Math.round(bitmap.height * scale);
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+                    if (bitmap.close) { bitmap.close(); }
+
+                    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+
+                    // Foto yang sudah kecil tidak perlu disandikan ulang.
+                    if (! blob || blob.size >= file.size) { return file; }
+
+                    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', {
+                        type: 'image/jpeg',
+                        lastModified: Date.now(),
+                    });
+                },
+            };
+        }
+    </script>
 </body>
 </html>
