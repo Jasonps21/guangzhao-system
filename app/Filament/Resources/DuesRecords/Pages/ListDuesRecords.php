@@ -50,6 +50,8 @@ class ListDuesRecords extends ListRecords
                 ->label('Cetak Kupon')
                 ->icon('heroicon-o-printer')
                 ->color('gray')
+                ->modalDescription('Kupon disiapkan satu kelompok sekali cetak. Setelah tombol ditekan, tunggu sampai PDF-nya terbuka — cukup sekali, jangan diulang.')
+                ->modalSubmitActionLabel('Siapkan Kupon')
                 ->schema([
                     TextInput::make('year')
                         ->label('Tahun')
@@ -61,19 +63,21 @@ class ListDuesRecords extends ListRecords
                         ->options(self::monthOptions())
                         ->default((int) now()->month)
                         ->required(),
+                    // Wajib satu kelompok: mencetak seluruh anggota sekaligus memakan
+                    // puluhan detik, dan kupon memang dibagikan per kelompok.
                     Select::make('group_id')
-                        ->label('Kelompok (kosong = semua)')
+                        ->label('Kelompok')
+                        ->helperText('Pilih satu kelompok. Mencetak seluruh anggota sekaligus membuat prosesnya sangat lama.')
                         ->options(fn () => MemberGroup::query()->orderBy('name')->pluck('name', 'id'))
-                        ->searchable(),
+                        ->searchable()
+                        ->preload()
+                        ->required(),
                 ])
-                ->action(function (array $data) {
-                    $params = ['year' => $data['year'], 'month' => $data['month']];
-                    if (filled($data['group_id'] ?? null)) {
-                        $params['group'] = $data['group_id'];
-                    }
-
-                    return redirect()->route('dues.coupons', $params);
-                }),
+                ->action(fn (array $data) => redirect()->route('dues.coupons', [
+                    'year' => $data['year'],
+                    'month' => $data['month'],
+                    'group' => $data['group_id'],
+                ])),
 
             CreateAction::make(),
         ];

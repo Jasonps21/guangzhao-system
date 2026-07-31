@@ -10,10 +10,15 @@ use App\Models\Member;
 use App\Models\MemberGroup;
 use App\Models\OrganizationSetting;
 use App\Models\SocialFundRecord;
+// Facade dan kelas konkretnya hanya beda huruf besar-kecil (Pdf vs PDF), dan PHP
+// tidak membedakannya — kelas konkretnya dialiaskan agar keduanya tidak tertukar.
 use Barryvdh\DomPDF\Facade\Pdf;
+use Barryvdh\DomPDF\PDF as DomPdfDocument;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -21,6 +26,12 @@ class PdfController extends Controller
 {
     /**
      * Kupon iuran — F4 (215 × 330 mm), 10 kupon/lembar (2 × 5). (§F, §6.7)
+     *
+     * Menata ratusan kupon memakan puluhan detik, dan petugas yang mengira
+     * cetakannya belum jalan sering menekan tombol lagi. Hasilnya karena itu
+     * disimpan di cache dan dijaga kunci: penekanan kedua ikut menunggu cetakan
+     * yang sedang berjalan, lalu langsung menerima berkas yang sama — bukan
+     * memulai render kedua yang membebani server dua kali lipat.
      */
     public function coupons(Request $request): Response
     {
@@ -28,7 +39,48 @@ class PdfController extends Controller
         $month = (int) $request->integer('month', (int) now()->month);
         $groupId = $request->integer('group') ?: null;
 
-        $records = DuesRecord::query()
+        $records = $this->couponRecords($year, $month, $groupId);
+        $organization = OrganizationSetting::current();
+
+        $key = 'kupon:'.md5(implode('|', [
+            $year,
+            $month,
+            $groupId ?? 'semua',
+            $records->count(),
+            // Sidik jari data: begitu ada anggota atau tagihan yang berubah,
+            // kuncinya ikut berubah sehingga cetakan lama tidak pernah tersaji basi.
+            $records->max('updated_at')?->timestamp,
+            $records->max(fn (DuesRecord $record): ?Carbon => $record->member->updated_at)?->timestamp,
+            $organization->updated_at?->timestamp,
+        ]));
+
+        $build = fn (): string => $this->render('pdf.coupons', [
+            'records' => $records,
+            'period' => Carbon::create($year, $month, 1)->translatedFormat('F Y'),
+            'organization' => $organization,
+            // Watermark diulang di tiap kupon — pakai path, bukan data URI. (§logoPath)
+            'logo' => $this->logoPath($organization),
+        ])->setPaper([0, 0, 609.45, 935.43])->output(); // F4 215×330mm in points
+
+        $bytes = Cache::get($key) ?? Cache::lock($key.':lock', 300)->block(
+            300,
+            fn (): string => Cache::remember($key, now()->addHours(6), $build),
+        );
+
+        return response($bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="kupon-iuran-'.$year.'-'.$month.'.pdf"',
+        ]);
+    }
+
+    /**
+     * Tagihan yang layak dicetak jadi kupon, sudah terurut siap dibagikan.
+     *
+     * @return Collection<int, DuesRecord>
+     */
+    private function couponRecords(int $year, int $month, ?int $groupId): Collection
+    {
+        return DuesRecord::query()
             ->with(['member.group'])
             ->forPeriod($year, $month)
             ->whereHas('member', function ($query) use ($groupId): void {
@@ -45,17 +97,6 @@ class PdfController extends Controller
                 $r->member->member_number,
             ])
             ->values();
-
-        $organization = OrganizationSetting::current();
-
-        $pdf = Pdf::loadView('pdf.coupons', [
-            'records' => $records,
-            'period' => Carbon::create($year, $month, 1)->translatedFormat('F Y'),
-            'organization' => $organization,
-            'logo' => $this->logoDataUri($organization),
-        ])->setPaper([0, 0, 609.45, 935.43]); // F4 215×330mm in points
-
-        return $pdf->stream("kupon-iuran-{$year}-{$month}.pdf");
     }
 
     /**
@@ -93,7 +134,7 @@ class PdfController extends Controller
 
         $organization = OrganizationSetting::current();
 
-        $pdf = Pdf::loadView('pdf.member-list', [
+        $pdf = $this->render('pdf.member-list', [
             'groups' => $groups,
             'organization' => $organization,
             'logo' => $this->logoDataUri($organization),
@@ -110,7 +151,7 @@ class PdfController extends Controller
     {
         $organization = OrganizationSetting::current();
 
-        $pdf = Pdf::loadView('pdf.member-card', [
+        $pdf = $this->render('pdf.member-card', [
             'member' => $member->load('group'),
             'organization' => $organization,
             'logo' => $this->logoDataUri($organization),
@@ -142,7 +183,7 @@ class PdfController extends Controller
     {
         $organization = OrganizationSetting::current();
 
-        $pdf = Pdf::loadView('pdf.social-fund-receipt', [
+        $pdf = $this->render('pdf.social-fund-receipt', [
             'record' => $record,
             'organization' => $organization,
             'logo' => $this->logoDataUri($organization),
@@ -158,7 +199,7 @@ class PdfController extends Controller
     {
         $organization = OrganizationSetting::current();
 
-        $pdf = Pdf::loadView('pdf.dues-receipt', [
+        $pdf = $this->render('pdf.dues-receipt', [
             'receipt' => $receipt->load(['member', 'issuedBy']),
             'organization' => $organization,
             'logo' => $this->logoDataUri($organization),
@@ -175,7 +216,7 @@ class PdfController extends Controller
     {
         $organization = OrganizationSetting::current();
 
-        $pdf = Pdf::loadView('pdf.condolence-note', [
+        $pdf = $this->render('pdf.condolence-note', [
             'payment' => $payment,
             'organization' => $organization,
             'logo' => $this->logoDataUri($organization),
@@ -183,6 +224,41 @@ class PdfController extends Controller
         ])->setPaper('a5', 'landscape');
 
         return $pdf->stream('uang-duka-'.$variant.'-'.$payment->receipt_number.'.pdf');
+    }
+
+    /**
+     * Semua template di sini memuat font CJK WenQuanYi berukuran 11,6 MB.
+     * Tanpa subsetting DomPDF menanam SELURUH font di tiap berkas, sehingga nota
+     * satu halaman pun berbobot ±6,8 MB dan lama diunduh. Dengan subsetting hanya
+     * glif yang benar-benar dipakai yang ikut — hasil cetaknya identik, berkasnya
+     * turun ke ±0,2 MB.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function render(string $view, array $data): DomPdfDocument
+    {
+        return Pdf::loadView($view, $data)->setOption('enable_font_subsetting', true);
+    }
+
+    /**
+     * Berkas logo di disk, untuk template yang mengulang gambarnya banyak kali.
+     *
+     * Kupon menampilkan watermark di tiap kupon. Bila logonya disisipkan sebagai
+     * data URI, string base64 ±277 KB ikut tersalin ratusan kali — HTML-nya
+     * membengkak sampai ratusan MB sebelum DomPDF sempat bekerja. Lewat path,
+     * DomPDF membaca berkasnya sekali dan meng-cache-nya.
+     */
+    private function logoPath(OrganizationSetting $organization): ?string
+    {
+        $uploaded = $organization->logo_path;
+
+        if ($uploaded !== null && Storage::disk('public')->exists($uploaded)) {
+            return Storage::disk('public')->path($uploaded);
+        }
+
+        $bundled = public_path('images/logo-guangzao.png');
+
+        return is_file($bundled) ? $bundled : null;
     }
 
     /**

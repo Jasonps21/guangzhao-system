@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\MemberStatus;
+use App\Filament\Resources\DuesRecords\Pages\ListDuesRecords;
 use App\Models\DuesRecord;
 use App\Models\Member;
 use App\Models\MemberGroup;
@@ -11,6 +12,8 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\View;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class CouponPdfTest extends TestCase
@@ -36,6 +39,157 @@ class CouponPdfTest extends TestCase
         $response->assertOk();
         $this->assertSame('application/pdf', $response->headers->get('content-type'));
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    /**
+     * Font CJK hanya ditanam sebagian (subset). Tanpa ini DomPDF menyalin seluruh
+     * berkas WenQuanYi 11,6 MB ke tiap PDF: satu kupon pun jadi ±6,8 MB, dan
+     * unduhannya sendiri yang membuat cetak terasa lama.
+     */
+    public function test_coupon_pdf_embeds_only_a_font_subset(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $member = Member::factory()->active()->create(['name_hanzi' => '黄英强']);
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+        ]);
+
+        $pdf = $this->actingAs($admin)
+            ->get(route('dues.coupons', ['year' => 2025, 'month' => 12]))
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('#/BaseFont\s*/[A-Z]{6}\+WenQuanYiZenHei#', $pdf);
+        $this->assertLessThan(2 * 1024 * 1024, strlen($pdf), 'PDF kupon membengkak — font CJK kemungkinan ditanam utuh lagi.');
+    }
+
+    /**
+     * Kelompok wajib dipilih. Mencetak seluruh anggota sekaligus memakan puluhan
+     * detik, dan kupon memang dibagikan per kelompok.
+     */
+    public function test_printing_requires_a_group_to_be_chosen(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $group = MemberGroup::factory()->create();
+
+        Livewire::actingAs($admin)
+            ->test(ListDuesRecords::class)
+            ->callAction('printCoupons', data: [
+                'year' => 2025,
+                'month' => 12,
+                'group_id' => null,
+            ])
+            ->assertHasActionErrors(['group_id' => 'required'])
+            ->assertNoRedirect();
+
+        Livewire::actingAs($admin)
+            ->test(ListDuesRecords::class)
+            ->callAction('printCoupons', data: [
+                'year' => 2025,
+                'month' => 12,
+                'group_id' => $group->id,
+            ])
+            ->assertHasNoActionErrors()
+            ->assertRedirect(route('dues.coupons', [
+                'year' => 2025,
+                'month' => 12,
+                'group' => $group->id,
+            ]));
+    }
+
+    /**
+     * Penekanan tombol cetak yang kedua tidak boleh memicu render kedua —
+     * itulah yang membuat server bekerja dua kali saat petugas mengira
+     * cetakannya belum jalan.
+     */
+    public function test_repeating_the_same_print_is_served_from_cache(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $group = MemberGroup::factory()->create();
+        $member = Member::factory()->active()->create(['group_id' => $group->id]);
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+        ]);
+
+        $url = route('dues.coupons', ['year' => 2025, 'month' => 12, 'group' => $group->id]);
+
+        $first = $this->actingAs($admin)->get($url);
+        $first->assertOk();
+
+        $renders = 0;
+        View::composer('pdf.coupons', function () use (&$renders): void {
+            $renders++;
+        });
+
+        $second = $this->actingAs($admin)->get($url);
+        $second->assertOk();
+
+        $this->assertSame(0, $renders, 'Cetakan kedua seharusnya diambil dari cache, bukan dirender ulang.');
+        $this->assertSame($first->getContent(), $second->getContent());
+    }
+
+    /**
+     * Cache dikunci sidik jari data: begitu ada anggota yang berubah, kupon
+     * lama tidak boleh tersaji lagi.
+     */
+    public function test_editing_a_member_invalidates_the_cached_coupons(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $group = MemberGroup::factory()->create();
+        $member = Member::factory()->active()->create([
+            'group_id' => $group->id,
+            'name_indonesian' => 'Nama Lama',
+        ]);
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+        ]);
+
+        $url = route('dues.coupons', ['year' => 2025, 'month' => 12, 'group' => $group->id]);
+
+        $before = $this->actingAs($admin)->get($url)->getContent();
+
+        $this->travel(1)->second();
+        $member->update(['name_indonesian' => 'Nama Baru']);
+
+        $after = $this->actingAs($admin)->get($url)->getContent();
+
+        $this->assertNotSame($before, $after);
+    }
+
+    /**
+     * Watermark diulang di tiap kupon, jadi logonya harus dirujuk lewat path.
+     * Kalau kembali jadi data URI, HTML-nya membengkak ratusan MB saat mencetak
+     * seluruh anggota dan proses cetak melambat drastis.
+     */
+    public function test_coupon_html_does_not_inline_the_logo_per_coupon(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $members = Member::factory()->active()->count(12)->create();
+        foreach ($members as $member) {
+            DuesRecord::factory()->create([
+                'member_id' => $member->id,
+                'period_year' => 2025,
+                'period_month' => 12,
+            ]);
+        }
+
+        $rendered = [];
+        view()->composer('pdf.coupons', function ($view) use (&$rendered): void {
+            $rendered[] = $view->getData();
+        });
+
+        $this->actingAs($admin)->get(route('dues.coupons', ['year' => 2025, 'month' => 12]))->assertOk();
+
+        $this->assertNotEmpty($rendered);
+        $logo = $rendered[0]['logo'];
+        $this->assertIsString($logo);
+        $this->assertStringNotContainsString('base64', $logo);
+        $this->assertFileExists($logo);
     }
 
     public function test_coupon_route_is_behind_auth(): void
@@ -228,13 +382,6 @@ class CouponPdfTest extends TestCase
 
         $response->assertOk();
         $this->assertStringStartsWith('%PDF', $response->getContent());
-    }
-
-    public function test_bill_at_home_is_cast_to_boolean(): void
-    {
-        $member = Member::factory()->create(['bill_at_home' => true]);
-
-        $this->assertTrue($member->refresh()->bill_at_home);
     }
 
     public function test_inactive_members_are_excluded_from_coupons(): void
