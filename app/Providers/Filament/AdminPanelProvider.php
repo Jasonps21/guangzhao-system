@@ -13,8 +13,6 @@ use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -45,9 +43,10 @@ class AdminPanelProvider extends PanelProvider
             // Widget laporan (DuesReportStats/DuesGroupSummary/DuesArrearsList) butuh
             // year/month dan disisipkan via @livewire pada halaman Laporan Keuangan,
             // jadi tidak boleh ikut auto-discovery dashboard.
+            // Widget bawaan Filament (sambutan akun & promo framework) dilepas:
+            // tidak berguna bagi pengurus, dan yang promo membocorkan versi
+            // framework. Dashboard menampilkan data perkumpulan saja.
             ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
                 DuesStatsOverview::class,
                 LocationCoverageStats::class,
             ])

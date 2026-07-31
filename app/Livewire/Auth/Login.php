@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Auth;
 
+use App\Models\OrganizationSetting;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -128,6 +129,10 @@ class Login extends Component
 
     public function render()
     {
-        return view('livewire.auth.login');
+        return view('livewire.auth.login', [
+            // Identitas diambil dari sumber yang sama dengan kartu & nota cetak,
+            // supaya nama dan aksara Mandarinnya tidak pernah berbeda.
+            'organization' => OrganizationSetting::current(),
+        ]);
     }
 }

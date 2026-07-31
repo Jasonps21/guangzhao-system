@@ -222,7 +222,22 @@ class PdfController extends Controller
             'display' => 'standalone',
             'background_color' => '#f4f2ef',
             'theme_color' => '#f4f2ef',
-            'icons' => [],
+            // Lambang perkumpulan sebagai ikon layar utama, supaya kolektor
+            // mengenali aplikasinya dari ikon dan bukan dari huruf bawaan browser.
+            'icons' => [
+                [
+                    'src' => asset('images/logo-192.png'),
+                    'sizes' => '192x192',
+                    'type' => 'image/png',
+                    'purpose' => 'any',
+                ],
+                [
+                    'src' => asset('images/logo-guangzao.png'),
+                    'sizes' => '352x352',
+                    'type' => 'image/png',
+                    'purpose' => 'any',
+                ],
+            ],
         ]);
     }
 }

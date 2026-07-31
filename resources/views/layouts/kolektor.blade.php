@@ -68,6 +68,14 @@
             --info:       #1f4f8f;
             --info-soft:  #ebf1fa;
 
+            /* Warna diambil dari segel perkumpulan: merah tua & kuning emas.
+               Dipakai hanya di halaman masuk sebagai momen identitas — di dalam
+               aplikasi aksen tetap amber agar tidak ada dua aksen bersaing. */
+            --seal:       #7c1c1c;
+            --seal-deep:  #5e1414;
+            --seal-soft:  #f7ebe6;
+            --seal-gold:  #d8c356;
+
             /* Bayangan ambient berlapis — lembut, tanpa garis gelap keras. */
             --lift-1: 0 1px 2px rgba(22, 19, 15, .04), 0 4px 12px -4px rgba(22, 19, 15, .06);
             --lift-2: 0 2px 4px rgba(22, 19, 15, .04), 0 14px 34px -10px rgba(22, 19, 15, .13);
@@ -778,7 +786,165 @@
             color: var(--ink-3);
         }
 
-        /* ── Layar masuk ───────────────────────────────────────────── */
+        /* ── Gerbang masuk ─────────────────────────────────────────── */
+        .gate {
+            position: relative;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 2.5rem 1.25rem calc(env(safe-area-inset-bottom) + 2.5rem);
+            overflow: hidden;
+        }
+        /* Cahaya segel: satu sapuan radial hangat di belakang logo. Bukan blob —
+           pusatnya tepat di balik medali supaya terbaca sebagai sorotan. */
+        .gate::before {
+            content: "";
+            position: absolute;
+            top: -18%;
+            left: 50%;
+            width: min(46rem, 150vw);
+            aspect-ratio: 1;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            background:
+                radial-gradient(circle at 50% 42%, rgba(216, 195, 86, .20), transparent 46%),
+                radial-gradient(circle at 50% 50%, rgba(124, 28, 28, .11), transparent 62%);
+            pointer-events: none;
+        }
+        .gate__inner { position: relative; width: 100%; max-width: 24rem; margin: 0 auto; }
+
+        /* Medali logo: cangkang luar + inti, mengikuti bentuk segel yang bundar. */
+        .seal {
+            width: 7.5rem;
+            height: 7.5rem;
+            margin: 0 auto 1.5rem;
+            padding: .5rem;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .72);
+            border: 1px solid rgba(124, 28, 28, .12);
+            box-shadow:
+                0 2px 6px rgba(94, 20, 20, .07),
+                0 18px 40px -14px rgba(94, 20, 20, .3),
+                inset 0 1px 0 rgba(255, 255, 255, .95);
+        }
+        .seal img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+        .gate__org {
+            text-align: center;
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1.3;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            color: var(--seal);
+            margin: 0;
+            text-wrap: balance;
+        }
+        /* Aksara Mandarin sama dengan kartu & nota cetak. Memakai font CJK bawaan
+           sistem — tidak ada berkas font tambahan yang perlu diunduh di lapangan. */
+        .gate__hanzi {
+            text-align: center;
+            font-family: 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC',
+                         'Noto Sans CJK SC', 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
+            font-size: 1.4375rem;
+            font-weight: 500;
+            line-height: 1.3;
+            letter-spacing: .04em;
+            color: var(--seal);
+            margin: .5rem 0 0;
+        }
+        .gate__place {
+            text-align: center;
+            font-size: .75rem;
+            letter-spacing: .22em;
+            text-transform: uppercase;
+            color: var(--ink-3);
+            margin: .5rem 0 0;
+        }
+        /* Belah ketupat kecil berwarna segel — penanda jeda yang terbaca sebagai
+           detail, bukan garis samar yang mirip cacat render. */
+        .gate__rule {
+            width: .4375rem;
+            height: .4375rem;
+            margin: 1.375rem auto;
+            border: 0;
+            border-radius: 1px;
+            transform: rotate(45deg);
+            background: var(--seal);
+            opacity: .5;
+        }
+        /* Judul & pengantar duduk di dalam kartu, rata tengah. */
+        .gate__title {
+            text-align: center;
+            font-size: 1.5rem;
+            line-height: 1.2;
+            letter-spacing: -.03em;
+            margin: 0 0 .375rem;
+        }
+        .gate__sub {
+            text-align: center;
+            font-size: .9375rem;
+            line-height: 1.45;
+            color: var(--ink-3);
+            margin: 0 0 1.375rem;
+            text-wrap: balance;
+        }
+
+        /* Kartu form: cangkang + inti, supaya kolom isian punya "rumah". */
+        .gate__card {
+            padding: .375rem;
+            border-radius: 1.625rem;
+            background: rgba(22, 19, 15, .04);
+            border: 1px solid var(--hairline-2);
+        }
+        .gate__form {
+            padding: 1.375rem 1.25rem 1.5rem;
+            border-radius: 1.25rem;
+            background: var(--card);
+            box-shadow: var(--lift-2), var(--inner-hi);
+        }
+        .gate__form .field:first-of-type { margin-top: 0; }
+        /* Fokus & tombol memakai warna segel agar identitasnya konsisten. */
+        .gate__form .input:focus {
+            border-color: rgba(124, 28, 28, .5);
+            box-shadow: 0 0 0 3.5px rgba(124, 28, 28, .12);
+        }
+        .gate__submit {
+            margin-top: 1.5rem;
+            background: var(--seal);
+            color: #fff;
+            padding-right: .4375rem;
+            box-shadow:
+                0 1px 2px rgba(94, 20, 20, .2),
+                0 10px 24px -10px rgba(94, 20, 20, .65),
+                inset 0 1px 0 rgba(255, 255, 255, .16);
+        }
+        .gate__submit:active { background: var(--seal-deep); }
+        .gate__foot {
+            text-align: center;
+            font-size: .75rem;
+            color: var(--ink-3);
+            margin: 1.5rem 0 0;
+        }
+
+        /* HP layar pendek (mis. 360×640): blok identitas dikecilkan supaya tombol
+           "Masuk" tetap terlihat tanpa menggulir. Pengguna lansia tidak mencari
+           tombol yang tersembunyi di bawah lipatan. */
+        @media (max-height: 730px) {
+            .gate { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+            .seal { width: 5rem; height: 5rem; margin-bottom: .875rem; padding: .375rem; }
+            .gate__org { font-size: .9375rem; }
+            .gate__hanzi { font-size: 1.25rem; margin-top: .375rem; }
+            .gate__place { margin-top: .375rem; }
+            .gate__rule { display: none; }
+            .gate__card { margin-top: 1.125rem; }
+            .gate__title { font-size: 1.3125rem; }
+            .gate__sub { margin-bottom: 1.125rem; }
+            .gate__foot { margin-top: 1rem; }
+        }
+
+        /* Layar masuk lama (dipakai komponen lain bila ada). */
         .auth { max-width: 25rem; margin: 0 auto; padding: 3rem 1.5rem 2rem; }
         .auth__eyebrow {
             display: inline-block;

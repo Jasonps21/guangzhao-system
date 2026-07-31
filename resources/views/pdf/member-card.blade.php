@@ -55,6 +55,9 @@
             display: inline-block; text-align: center; font-size: 6.5pt;
             color: #999;
         }
+        /* Anggota tanpa pasfoto memakai lambang perkumpulan, bukan kotak kosong —
+           kartu tetap terlihat resmi ketika dicetak. */
+        .photo .placeholder img { width: 13mm; height: 13mm; border: 0; margin-top: 4.5mm; }
 
         table.data { width: 100%; border-collapse: collapse; }
         table.data td { vertical-align: top; padding: 0.5mm 0; font-size: 7pt; line-height: 1.05; }
@@ -116,6 +119,8 @@
             <div class="photo">
                 @if ($member->photo_path && file_exists(storage_path('app/private/'.$member->photo_path)))
                     <img src="{{ storage_path('app/private/'.$member->photo_path) }}" alt="">
+                @elseif ($logo)
+                    <div class="placeholder"><img src="{{ $logo }}" alt=""></div>
                 @else
                     <div class="placeholder">Tanpa<br>Foto</div>
                 @endif
