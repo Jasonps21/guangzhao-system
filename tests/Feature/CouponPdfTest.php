@@ -11,6 +11,7 @@ use App\Models\OrganizationSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\View;
 use Livewire\Livewire;
@@ -102,9 +103,16 @@ class CouponPdfTest extends TestCase
      * Penekanan tombol cetak yang kedua tidak boleh memicu render kedua —
      * itulah yang membuat server bekerja dua kali saat petugas mengira
      * cetakannya belum jalan.
+     *
+     * Sengaja memakai driver cache `database` seperti produksi. Dengan driver
+     * `array` bawaan pengujian, byte apa pun diterima begitu saja di memori,
+     * sehingga PDF mentah yang ditolak kolom mediumtext MariaDB lolos tanpa
+     * ketahuan — persis yang membuat cetak kupon error 500 di server.
      */
     public function test_repeating_the_same_print_is_served_from_cache(): void
     {
+        config(['cache.default' => 'database']);
+
         $admin = User::factory()->admin()->create();
         $group = MemberGroup::factory()->create();
         $member = Member::factory()->active()->create(['group_id' => $group->id]);
@@ -129,6 +137,15 @@ class CouponPdfTest extends TestCase
 
         $this->assertSame(0, $renders, 'Cetakan kedua seharusnya diambil dari cache, bukan dirender ulang.');
         $this->assertSame($first->getContent(), $second->getContent());
+        $this->assertStringStartsWith('%PDF', $second->getContent());
+
+        // Apa pun yang masuk kolom cache harus aman sebagai teks.
+        foreach (DB::table('cache')->pluck('value') as $value) {
+            $this->assertTrue(
+                mb_check_encoding($value, 'UTF-8'),
+                'Nilai cache mengandung byte mentah — kolom mediumtext MariaDB akan menolaknya.',
+            );
+        }
     }
 
     /**

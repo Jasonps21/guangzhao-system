@@ -54,20 +54,23 @@ class PdfController extends Controller
             $organization->updated_at?->timestamp,
         ]));
 
-        $build = fn (): string => $this->render('pdf.coupons', [
+        // Disimpan sebagai base64: cache produksi memakai driver database, dan
+        // kolom `cache.value` bertipe mediumtext utf8mb4 — byte mentah PDF
+        // ditolak MariaDB dengan "Incorrect string value".
+        $build = fn (): string => base64_encode($this->render('pdf.coupons', [
             'records' => $records,
             'period' => Carbon::create($year, $month, 1)->translatedFormat('F Y'),
             'organization' => $organization,
             // Watermark diulang di tiap kupon — pakai path, bukan data URI. (§logoPath)
             'logo' => $this->logoPath($organization),
-        ])->setPaper([0, 0, 609.45, 935.43])->output(); // F4 215×330mm in points
+        ])->setPaper([0, 0, 609.45, 935.43])->output()); // F4 215×330mm in points
 
-        $bytes = Cache::get($key) ?? Cache::lock($key.':lock', 300)->block(
+        $encoded = Cache::get($key) ?? Cache::lock($key.':lock', 300)->block(
             300,
             fn (): string => Cache::remember($key, now()->addHours(6), $build),
         );
 
-        return response($bytes, 200, [
+        return response(base64_decode($encoded, strict: true), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="kupon-iuran-'.$year.'-'.$month.'.pdf"',
         ]);
