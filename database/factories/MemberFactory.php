@@ -36,7 +36,6 @@ class MemberFactory extends Factory
             'monthly_dues_amount' => $category->defaultAmount(),
             'group_id' => MemberGroup::factory(),
             'no_urut' => fake()->optional()->numberBetween(1, 50),
-            'bill_at_home' => fake()->boolean(20),
             'status' => MemberStatus::Aktif,
             'joined_at' => fake()->optional()->dateTimeBetween('-5 years'),
             'notes' => null,

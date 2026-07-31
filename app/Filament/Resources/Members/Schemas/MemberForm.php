@@ -14,7 +14,6 @@ use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ViewField;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
@@ -121,9 +120,8 @@ class MemberForm
                         ]),
                     ]),
 
-                // Kelompok, no. urut, dan penanda "tagih di rumah" adalah urusan
-                // penagihan — disatukan dengan nominal iurannya, bukan diselipkan
-                // di antara data kontak.
+                // Kelompok dan no. urut adalah urusan penagihan — disatukan dengan
+                // nominal iurannya, bukan diselipkan di antara data kontak.
                 Section::make('Iuran & Penagihan')
                     ->schema([
                         Grid::make(2)->schema([
@@ -143,9 +141,11 @@ class MemberForm
                                 ->label('Kategori Iuran')
                                 ->options(DuesCategory::class)
                                 ->live()
-                                ->afterStateUpdated(function (?string $state, Set $set): void {
-                                    if (filled($state)) {
-                                        $set('monthly_dues_amount', DuesCategory::from($state)->defaultAmount());
+                                // Filament meng-cast state select enum menjadi objek enum,
+                                // jadi hook ini menerima DuesCategory — bukan string.
+                                ->afterStateUpdated(function (?DuesCategory $state, Set $set): void {
+                                    if ($state !== null) {
+                                        $set('monthly_dues_amount', $state->defaultAmount());
                                     }
                                 })
                                 ->columnSpan(1),
@@ -156,10 +156,6 @@ class MemberForm
                                 ->default(0)
                                 ->required()
                                 ->columnSpan(1),
-                            Toggle::make('bill_at_home')
-                                ->label('Ditagih di rumah')
-                                ->helperText('Cetak "(tagih dirumah)" pada kupon iuran.')
-                                ->columnSpanFull(),
                         ]),
                     ]),
 

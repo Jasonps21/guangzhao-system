@@ -138,7 +138,6 @@
         /* Pinyin (e.g. "Huang Ying Qiang") shown small and de-emphasised so the
            Indonesian name stays the prominent one on the Nama line. */
         .pinyin { font-size: 9pt; font-weight: normal; font-style: italic; }
-        .note { font-weight: bold; font-style: italic; }
         .amount { font-weight: bold; }
         .month { font-weight: bold; color: #d00000; }
 
@@ -219,8 +218,7 @@
                             $namaLines = max(1, (int) ceil($namaWidth / $valueChars));
 
                             $alamatText = $member->address ? \Illuminate\Support\Str::limit($member->address, 48) : '-';
-                            $alamatWidth = mb_strlen($alamatText) + ($member->bill_at_home ? 15 : 0);
-                            $alamatLines = max(1, (int) ceil($alamatWidth / $valueChars));
+                            $alamatLines = max(1, (int) ceil(mb_strlen($alamatText) / $valueChars));
 
                             $usedMm = ($namaLines + $alamatLines + 2) * 5.2;
                             $rowGapMm = round(max(0.0, 31 - $usedMm) / 4, 2);
@@ -248,7 +246,7 @@
                                     <tr>
                                         <td class="label" style="padding-bottom: {{ $rowGapMm }}mm;">Alamat</td>
                                         <td class="sep">:</td>
-                                        <td style="padding-bottom: {{ $rowGapMm }}mm;">{{ $member->address ? \Illuminate\Support\Str::limit($member->address, 48) : '-' }}@if ($member->bill_at_home) <span class="note">(tagih dirumah)</span>@endif</td>
+                                        <td style="padding-bottom: {{ $rowGapMm }}mm;">{{ $alamatText }}</td>
                                     </tr>
                                     <tr>
                                         <td class="label" style="padding-bottom: {{ $rowGapMm }}mm;">Iuran</td>
