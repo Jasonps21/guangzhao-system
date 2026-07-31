@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Widgets\ArrearsByGroupChart;
+use App\Filament\Widgets\DuesCollectionTrend;
 use App\Filament\Widgets\DuesStatsOverview;
 use App\Filament\Widgets\LocationCoverageStats;
 use Filament\Http\Middleware\Authenticate;
@@ -49,6 +51,8 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 DuesStatsOverview::class,
                 LocationCoverageStats::class,
+                DuesCollectionTrend::class,
+                ArrearsByGroupChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,
