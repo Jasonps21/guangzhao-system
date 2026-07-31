@@ -651,6 +651,34 @@
         }
         .input::placeholder { color: var(--ink-3); }
 
+        /* Bidang dengan tombol menempel di dalamnya (mis. lihat kata sandi). */
+        .field__wrap { position: relative; }
+        .field__wrap .input { padding-right: 3.25rem; }
+        .reveal {
+            position: absolute;
+            inset: 0 0 0 auto;
+            /* 3rem penuh setinggi bidang: sasaran sentuh yang lega untuk jari
+               yang tidak lagi presisi, bukan ikon kecil di pojok. */
+            width: 3rem;
+            display: grid;
+            place-items: center;
+            padding: 0;
+            border: 0;
+            border-radius: 0 .875rem .875rem 0;
+            background: none;
+            color: var(--ink-2);
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transition: color var(--dur) var(--ease), transform var(--dur) var(--ease);
+        }
+        .reveal:active { transform: scale(.9); }
+        .reveal:hover { color: var(--ink); }
+        .reveal:focus-visible {
+            outline: 2px solid rgba(124, 28, 28, .55);
+            outline-offset: -3px;
+        }
+        .reveal .ico { width: 1.375rem; height: 1.375rem; }
+
         /* Tombol GPS */
         .btn--gps {
             width: auto;
@@ -1037,6 +1065,8 @@
         <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3.5 13h4l1.5 2.5h6L16.5 13h4"/><path d="M5.4 5.6 3.5 13v4.5A1.5 1.5 0 0 0 5 19h14a1.5 1.5 0 0 0 1.5-1.5V13l-1.9-7.4A1.5 1.5 0 0 0 17.15 4.5H6.85A1.5 1.5 0 0 0 5.4 5.6Z"/></symbol>
         <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.75"/><path d="m16 16 4.25 4.25"/></symbol>
         <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.75 12 5.75 21.5 12 21.5 12 18 18.25 12 18.25 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3.25"/></symbol>
+        <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.8 5.95A9.9 9.9 0 0 1 12 5.75c6 0 9.5 6.25 9.5 6.25a16.6 16.6 0 0 1-3.2 3.9"/><path d="M6.4 6.75A16.4 16.4 0 0 0 2.5 12S6 18.25 12 18.25c1.5 0 2.85-.4 4-1"/><path d="M9.9 9.9a3.25 3.25 0 0 0 4.3 4.3"/><path d="m4 4 16 16"/></symbol>
         <symbol id="i-users" viewBox="0 0 24 24"><path d="M15.5 20v-1.6a3.6 3.6 0 0 0-3.6-3.6H6.6A3.6 3.6 0 0 0 3 18.4V20"/><circle cx="9.25" cy="7.6" r="3.6"/><path d="M21 20v-1.6a3.6 3.6 0 0 0-2.7-3.48"/><path d="M15.75 4.12a3.6 3.6 0 0 1 0 6.97"/></symbol>
     </svg>
 

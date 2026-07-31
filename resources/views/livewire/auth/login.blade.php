@@ -47,16 +47,36 @@
                         >
                     </div>
 
-                    <div class="field">
+                    {{-- Kata sandi bisa dilihat sebentar sebelum dikirim: mengetik
+                         di balik titik-titik adalah sumber gagal masuk paling sering
+                         bagi pengguna lansia, apalagi di papan ketik HP. --}}
+                    <div class="field" x-data="{ show: false }">
                         <label class="field__label" for="password">Kata Sandi</label>
-                        <input
-                            id="password"
-                            class="input"
-                            type="password"
-                            wire:model="password"
-                            autocomplete="current-password"
-                            enterkeyhint="go"
-                        >
+                        <div class="field__wrap">
+                            <input
+                                id="password"
+                                class="input"
+                                type="password"
+                                :type="show ? 'text' : 'password'"
+                                wire:model="password"
+                                autocomplete="current-password"
+                                enterkeyhint="go"
+                            >
+                            <button
+                                type="button"
+                                class="reveal"
+                                x-on:click="show = ! show"
+                                x-bind:aria-pressed="show"
+                                x-bind:aria-label="show ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+                                x-bind:title="show ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
+                                aria-label="Tampilkan kata sandi"
+                                title="Tampilkan kata sandi"
+                            >
+                                <svg class="ico" aria-hidden="true">
+                                    <use href="#i-eye" x-bind:href="show ? '#i-eye-off' : '#i-eye'"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
 
                     <button type="submit" class="btn gate__submit" wire:loading.attr="disabled" wire:target="login">

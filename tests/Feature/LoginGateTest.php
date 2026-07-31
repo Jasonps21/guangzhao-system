@@ -146,6 +146,21 @@ class LoginGateTest extends TestCase
         RateLimiter::clear('daya|127.0.0.1');
     }
 
+    /**
+     * Kata sandi harus bisa diintip sebelum dikirim, tapi tetap tertutup saat
+     * halaman dibuka — kalau default-nya terbuka, sandi terpampang di layar HP
+     * yang sering dipegang bergantian.
+     */
+    public function test_password_can_be_revealed_and_starts_hidden(): void
+    {
+        Livewire::test(Login::class)
+            ->assertSeeHtml('type="password"')
+            ->assertSeeHtml(':type="show ? \'text\' : \'password\'"')
+            ->assertSeeHtml('x-data="{ show: false }"')
+            ->assertSeeHtml('class="reveal"')
+            ->assertSee('Tampilkan kata sandi');
+    }
+
     public function test_old_login_urls_redirect_into_the_single_gate(): void
     {
         $this->get('/kolektor/login')->assertRedirect('/masuk');
