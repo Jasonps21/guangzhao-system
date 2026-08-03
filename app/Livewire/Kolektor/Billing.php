@@ -6,6 +6,7 @@ use App\Enums\CollectionMethod;
 use App\Enums\DuesStatus;
 use App\Enums\MemberStatus;
 use App\Enums\VisitOutcome;
+use App\Enums\WhatsappOwner;
 use App\Models\DuesRecord;
 use App\Models\Member;
 use App\Models\MemberGroup;
@@ -15,6 +16,8 @@ use App\Support\VisitService;
 use Closure;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -26,13 +29,6 @@ use Livewire\WithFileUploads;
 class Billing extends Component
 {
     use WithFileUploads;
-
-    /**
-     * @var array<string, string>
-     */
-    private const PHONE_MESSAGES = [
-        'phone.required' => 'Nomor telepon wajib diisi.',
-    ];
 
     public MemberGroup $group;
 
@@ -65,11 +61,18 @@ class Billing extends Component
     public ?string $houseAddress = null;
 
     /**
-     * Nomor telepon anggota — HP atau telepon rumah. Kunjungan rumah adalah
-     * satu-satunya kesempatan mengumpulkannya, jadi wajib diisi sebelum
-     * kunjungan bisa disimpan.
+     * Nomor anggota itu sendiri — HP atau telepon rumah.
      */
     public ?string $phone = null;
+
+    /**
+     * Nomor yang bisa dihubungi lewat WhatsApp. Sering bukan milik anggota:
+     * banyak anggota lansia memakai telepon rumah, dan yang memegang
+     * WhatsApp adalah anak atau menantunya.
+     */
+    public ?string $whatsappPhone = null;
+
+    public string $whatsappOwner = WhatsappOwner::Sendiri->value;
 
     public string $outcome = VisitOutcome::Bertemu->value;
 
@@ -194,6 +197,10 @@ class Billing extends Component
         $this->phone = PhoneNumber::isValid($member->phone)
             ? PhoneNumber::normalize($member->phone)
             : null;
+        $this->whatsappPhone = PhoneNumber::isValid($member->whatsapp_phone)
+            ? PhoneNumber::normalize($member->whatsapp_phone)
+            : null;
+        $this->whatsappOwner = ($member->whatsapp_owner ?? WhatsappOwner::Sendiri)->value;
         $this->outcome = VisitOutcome::Bertemu->value;
         $this->note = null;
         $this->lat = null;
@@ -207,7 +214,19 @@ class Billing extends Component
         $this->activeMemberId = null;
         $this->photo = null;
         $this->phone = null;
+        $this->whatsappPhone = null;
+        $this->whatsappOwner = WhatsappOwner::Sendiri->value;
         $this->resetErrorBag();
+    }
+
+    /**
+     * Kasus paling umum: nomor anggota itu sendiri juga nomor WhatsApp-nya.
+     * Satu ketukan, supaya kolektor tidak mengetik nomor yang sama dua kali.
+     */
+    public function copyPhoneToWhatsapp(): void
+    {
+        $this->whatsappPhone = $this->phone;
+        $this->whatsappOwner = WhatsappOwner::Sendiri->value;
     }
 
     /**
@@ -218,27 +237,31 @@ class Billing extends Component
     {
         $member = $this->resolveGroupMember((int) $this->activeMemberId);
         $mustComplete = ! $member->hasCompleteLocation();
-        $this->phone = PhoneNumber::normalize($this->phone);
+        $this->normalizeContactInput();
 
         $this->validate([
             'lat' => [$mustComplete ? 'required' : 'nullable', 'numeric', 'between:-90,90'],
             'lng' => [$mustComplete ? 'required' : 'nullable', 'numeric', 'between:-180,180'],
             'photo' => [$mustComplete ? 'required' : 'nullable', 'image', 'max:8192'],
-            'phone' => $this->phoneRules(),
+            ...$this->contactRules(),
             'houseAddress' => ['nullable', 'string', 'max:1000'],
             'outcome' => ['required', 'string'],
             'note' => ['nullable', 'string', 'max:1000'],
-        ], messages: self::PHONE_MESSAGES, attributes: [
+        ], attributes: [
             'lat' => 'titik GPS',
             'lng' => 'titik GPS',
             'photo' => 'foto rumah',
         ]);
+
+        $this->assertReachable();
 
         app(VisitService::class)->record($member, Auth::user(), [
             'latitude' => $this->lat,
             'longitude' => $this->lng,
             'address' => $this->houseAddress,
             'phone' => $this->phone,
+            'whatsapp_phone' => $this->whatsappPhone,
+            'whatsapp_owner' => $this->whatsappOwner,
             'outcome' => $this->outcome,
             'note' => $this->note,
         ], $this->photo);
@@ -258,24 +281,28 @@ class Billing extends Component
     public function saveLocationOnly(): void
     {
         $member = $this->resolveGroupMember((int) $this->activeMemberId);
-        $this->phone = PhoneNumber::normalize($this->phone);
+        $this->normalizeContactInput();
 
         $this->validate([
             'lat' => ['required', 'numeric', 'between:-90,90'],
             'lng' => ['required', 'numeric', 'between:-180,180'],
-            'phone' => $this->phoneRules(),
+            ...$this->contactRules(),
             'houseAddress' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:1000'],
-        ], messages: self::PHONE_MESSAGES, attributes: [
+        ], attributes: [
             'lat' => 'titik GPS',
             'lng' => 'titik GPS',
         ]);
+
+        $this->assertReachable();
 
         app(VisitService::class)->record($member, Auth::user(), [
             'latitude' => $this->lat,
             'longitude' => $this->lng,
             'address' => $this->houseAddress,
             'phone' => $this->phone,
+            'whatsapp_phone' => $this->whatsappPhone,
+            'whatsapp_owner' => $this->whatsappOwner,
             'outcome' => $this->outcome,
             'note' => $this->note,
         ]);
@@ -301,18 +328,58 @@ class Billing extends Component
     }
 
     /**
-     * Aturan nomor WhatsApp, dipakai kedua jalur simpan. Bentuk sahnya
-     * ditentukan satu tempat saja, di PhoneNumber.
-     *
-     * @return array<int, mixed>
+     * Rapikan kedua nomor sebelum divalidasi, supaya kolektor yang salah ketik
+     * melihat bentuk bersihnya, bukan ketikan mentahnya.
      */
-    protected function phoneRules(): array
+    protected function normalizeContactInput(): void
     {
-        return ['required', 'string', function (string $attribute, mixed $value, Closure $fail): void {
-            if (! PhoneNumber::isValid(is_string($value) ? $value : null)) {
-                $fail('Isi satu nomor saja, HP atau telepon rumah — mis. 081234567890 atau 0411362589.');
+        $this->phone = PhoneNumber::normalize($this->phone);
+        $this->whatsappPhone = PhoneNumber::normalize($this->whatsappPhone);
+    }
+
+    /**
+     * Aturan kedua kolom nomor, dipakai kedua jalur simpan. Bentuk nomor yang
+     * sah ditentukan satu tempat saja, di PhoneNumber.
+     *
+     * Anggota harus bisa dihubungi lewat salah satu dari keduanya — tidak
+     * dipaksa dua-duanya, karena ada anggota yang seisi keluarganya tidak
+     * memakai WhatsApp, dan ada yang nomornya sendiri sudah cukup.
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    protected function contactRules(): array
+    {
+        $single = fn (string $label): Closure => function (string $attribute, mixed $value, Closure $fail) use ($label): void {
+            if (blank($value)) {
+                return;
             }
-        }];
+
+            if (! PhoneNumber::isValid(is_string($value) ? $value : null)) {
+                $fail('Isi satu '.$label.' saja — mis. 081234567890 atau 0411362589.');
+            }
+        };
+
+        return [
+            'phone' => ['nullable', 'string', $single('nomor telepon')],
+            'whatsappPhone' => ['nullable', 'string', $single('nomor WhatsApp')],
+            'whatsappOwner' => ['required', Rule::enum(WhatsappOwner::class)],
+        ];
+    }
+
+    /**
+     * Anggota harus bisa dihubungi lewat salah satu nomor. Diperiksa terpisah
+     * dari aturan di atas: Laravel melewati closure pada kolom `nullable` yang
+     * kosong, padahal justru keadaan kosong itulah yang ingin ditangkap.
+     */
+    protected function assertReachable(): void
+    {
+        if (filled($this->phone) || filled($this->whatsappPhone)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'phone' => 'Isi nomor telepon atau nomor WhatsApp — minimal salah satu.',
+        ]);
     }
 
     /**
@@ -411,6 +478,7 @@ class Billing extends Component
             'period' => Carbon::create($this->year, $this->month, 1)->translatedFormat('F Y'),
             'monthOptions' => $this->monthOptions(),
             'outcomeOptions' => VisitOutcome::cases(),
+            'whatsappOwnerOptions' => WhatsappOwner::cases(),
         ]);
     }
 

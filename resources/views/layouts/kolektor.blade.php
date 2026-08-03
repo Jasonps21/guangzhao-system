@@ -631,6 +631,21 @@
             color: var(--ink-2);
             margin-bottom: .4375rem;
         }
+        /* Pintasan menyalin nomor: label & tombol sebaris agar hemat tinggi. */
+        .field__head { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+        .field__copy {
+            padding: .25rem .625rem;
+            border: 1px solid var(--hairline-2);
+            border-radius: var(--r-pill);
+            background: var(--surface-2);
+            color: var(--ink-2);
+            font-family: inherit;
+            font-size: .75rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: .4375rem;
+        }
+        .field__copy:active { transform: scale(.96); }
         .field__req {
             margin-left: .3125rem;
             padding: .0625rem .375rem;

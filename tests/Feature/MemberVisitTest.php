@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\CollectionMethod;
 use App\Enums\DuesStatus;
 use App\Enums\VisitOutcome;
+use App\Enums\WhatsappOwner;
 use App\Livewire\Kolektor\Billing;
 use App\Models\DuesRecord;
 use App\Models\Member;
@@ -185,7 +186,108 @@ class MemberVisitTest extends TestCase
         $this->assertSame(0, MemberVisit::query()->count());
     }
 
-    public function test_a_visit_cannot_be_saved_without_a_phone_number(): void
+    /**
+     * Anggota lansia sering hanya punya telepon rumah, sementara yang bisa
+     * dihubungi lewat WhatsApp adalah anak atau menantunya. Keduanya informasi
+     * berbeda dan harus punya kolomnya masing-masing.
+     */
+    public function test_it_records_a_relatives_whatsapp_number_beside_the_members_own_line(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->set('phone', '0411-362589')
+            ->set('whatsappPhone', '0852 9281 9058')
+            ->set('whatsappOwner', WhatsappOwner::AnakMenantu->value)
+            ->call('saveVisit')
+            ->assertHasNoErrors();
+
+        $member->refresh();
+        $this->assertSame('0411362589', $member->phone);
+        $this->assertSame('085292819058', $member->whatsapp_phone);
+        $this->assertSame(WhatsappOwner::AnakMenantu, $member->whatsapp_owner);
+    }
+
+    public function test_a_whatsapp_number_alone_is_enough_to_save_the_visit(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->set('phone', null)
+            ->set('whatsappPhone', '081234567890')
+            ->call('saveVisit')
+            ->assertHasNoErrors();
+
+        $this->assertSame('081234567890', $member->refresh()->whatsapp_phone);
+    }
+
+    public function test_a_whatsapp_number_defaults_to_belonging_to_the_member(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->set('whatsappPhone', '081234567890')
+            ->call('saveVisit')
+            ->assertHasNoErrors();
+
+        $this->assertSame(WhatsappOwner::Sendiri, $member->refresh()->whatsapp_owner);
+    }
+
+    public function test_it_rejects_a_malformed_whatsapp_number(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->set('whatsappPhone', '0852 / 0813 5497 6704')
+            ->call('saveVisit')
+            ->assertHasErrors(['whatsappPhone']);
+    }
+
+    public function test_the_card_flags_a_member_reachable_by_line_but_not_by_whatsapp(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create([
+            'phone' => '0411362589',
+            'whatsapp_phone' => null,
+        ]);
+        DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->create([
+            'member_id' => $member->id,
+        ]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->assertSee('Nomor WA belum ada');
+    }
+
+    public function test_a_visit_cannot_be_saved_without_any_number_at_all(): void
     {
         Storage::fake('public');
         [$collector, $group] = $this->collectorWithGroup();
@@ -203,7 +305,7 @@ class MemberVisitTest extends TestCase
         $this->assertSame(0, MemberVisit::query()->count());
     }
 
-    public function test_saving_the_gps_point_alone_also_requires_the_phone_number(): void
+    public function test_saving_the_gps_point_alone_also_requires_a_number(): void
     {
         [$collector, $group] = $this->collectorWithGroup();
         $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Members\Schemas;
 use App\Enums\DuesCategory;
 use App\Enums\Gender;
 use App\Enums\MemberStatus;
+use App\Enums\WhatsappOwner;
 use App\Support\ImageCompressor;
 use App\Support\PinyinConverter;
 use Filament\Forms\Components\DatePicker;
@@ -113,10 +114,20 @@ class MemberForm
                                 ->label('Telepon')
                                 ->tel()
                                 ->columnSpan(1),
+                            // Sering bukan nomor anggota sendiri: yang memegang
+                            // WhatsApp kerap anak atau menantunya.
+                            TextInput::make('whatsapp_phone')
+                                ->label('Nomor WhatsApp')
+                                ->tel()
+                                ->columnSpan(1),
+                            Select::make('whatsapp_owner')
+                                ->label('Nomor WhatsApp milik')
+                                ->options(WhatsappOwner::class)
+                                ->columnSpan(1),
                             Textarea::make('address')
                                 ->label('Alamat')
                                 ->rows(2)
-                                ->columnSpan(2),
+                                ->columnSpanFull(),
                         ]),
                     ]),
 

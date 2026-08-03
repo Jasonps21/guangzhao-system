@@ -74,11 +74,17 @@
                                         <span>{{ $member->address }}</span>
                                     </p>
                                 @endif
-                                {{-- Pengingat menanyakan nomor sebelum panel dibuka. --}}
-                                @if (blank($member->phone))
+                                {{-- Pengingat menanyakan nomor sebelum panel dibuka.
+                                     Dibedakan supaya kolektor tahu persis apa yang kurang. --}}
+                                @if (blank($member->phone) && blank($member->whatsapp_phone))
                                     <p class="row__nowa">
                                         <svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>
                                         <span>Nomor telepon belum ada</span>
+                                    </p>
+                                @elseif (blank($member->whatsapp_phone))
+                                    <p class="row__nowa">
+                                        <svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>
+                                        <span>Nomor WA belum ada</span>
                                     </p>
                                 @endif
                             </div>
@@ -280,8 +286,8 @@
                                      berisi dua nomor sekaligus tidak diisikan otomatis (tidak
                                      akan lolos), tapi tetap ditampilkan agar bisa dicocokkan. --}}
                                 <div class="field">
-                                    <label class="field__label" for="wa-{{ $member->id }}">Nomor Telepon / WhatsApp <span class="field__req">wajib</span></label>
-                                    <input id="wa-{{ $member->id }}" type="tel" inputmode="numeric" autocomplete="tel"
+                                    <label class="field__label" for="tel-{{ $member->id }}">Nomor telepon anggota</label>
+                                    <input id="tel-{{ $member->id }}" type="tel" inputmode="numeric" autocomplete="tel"
                                         class="input" wire:model="phone" placeholder="08xxxxxxxxxx atau 0411xxxxxx">
                                     @if (filled($member->phone) && ! \App\Support\PhoneNumber::isValid($member->phone))
                                         <p class="hint">Tercatat sebelumnya: {{ $member->phone }} — isi satu nomor saja.</p>
@@ -289,6 +295,32 @@
                                     @error('phone')
                                         <p class="err"><svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>{{ $message }}</p>
                                     @enderror
+                                </div>
+
+                                <div class="field">
+                                    <div class="field__head">
+                                        <label class="field__label" for="wa-{{ $member->id }}">Nomor WhatsApp</label>
+                                        <button type="button" class="field__copy" wire:click="copyPhoneToWhatsapp">
+                                            Sama dengan di atas
+                                        </button>
+                                    </div>
+                                    <input id="wa-{{ $member->id }}" type="tel" inputmode="numeric"
+                                        class="input" wire:model="whatsappPhone" placeholder="08xxxxxxxxxx">
+                                    @error('whatsappPhone')
+                                        <p class="err"><svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                {{-- Milik siapa nomor WA itu. Tanpa ini admin yang mengirim
+                                     pesan tidak tahu sedang bicara dengan anggotanya atau
+                                     dengan anaknya. --}}
+                                <div class="field">
+                                    <label class="field__label" for="waowner-{{ $member->id }}">Nomor WhatsApp itu milik</label>
+                                    <select id="waowner-{{ $member->id }}" class="input" wire:model="whatsappOwner">
+                                        @foreach ($whatsappOwnerOptions as $opt)
+                                            <option value="{{ $opt->value }}">{{ $opt->getLabel() }}</option>
+                                        @endforeach
+                                    </select>
                                 </div>
 
                                 <div class="field">

@@ -59,6 +59,10 @@ class MembersTable
                 TextColumn::make('phone')
                     ->label('Telepon')
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('whatsapp_phone')
+                    ->label('WhatsApp')
+                    ->description(fn (Member $record): ?string => $record->whatsapp_owner?->getLabel())
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('status')

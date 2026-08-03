@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\DuesCategory;
 use App\Enums\Gender;
 use App\Enums\MemberStatus;
+use App\Enums\WhatsappOwner;
 use App\Support\PinyinConverter;
 use Database\Factories\MemberFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,6 +36,8 @@ class Member extends Model
         'location_updated_at',
         'location_updated_by',
         'phone',
+        'whatsapp_phone',
+        'whatsapp_owner',
         'photo_path',
         'dues_category',
         'monthly_dues_amount',
@@ -52,6 +55,7 @@ class Member extends Model
             'dues_category' => DuesCategory::class,
             'status' => MemberStatus::class,
             'gender' => Gender::class,
+            'whatsapp_owner' => WhatsappOwner::class,
             'monthly_dues_amount' => 'decimal:2',
             'status_changed_at' => 'datetime',
             'location_updated_at' => 'datetime',

@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Enums\VisitOutcome;
+use App\Enums\WhatsappOwner;
 use App\Models\Member;
 use App\Models\MemberVisit;
 use App\Models\User;
@@ -27,7 +28,7 @@ class VisitService
      * anggota dengan data yang benar-benar diberikan. Riwayat tiap kunjungan
      * tetap tersimpan permanen di member_visits.
      *
-     * @param  array{latitude?: float|string|null, longitude?: float|string|null, address?: string|null, phone?: string|null, outcome?: VisitOutcome|string|null, note?: string|null}  $data
+     * @param  array{latitude?: float|string|null, longitude?: float|string|null, address?: string|null, phone?: string|null, whatsapp_phone?: string|null, whatsapp_owner?: WhatsappOwner|string|null, outcome?: VisitOutcome|string|null, note?: string|null}  $data
      */
     public function record(Member $member, User $collector, array $data, ?UploadedFile $photo = null): MemberVisit
     {
@@ -35,9 +36,11 @@ class VisitService
         $longitude = $this->normalizeCoordinate($data['longitude'] ?? null);
         $address = $data['address'] ?? null;
         $phone = PhoneNumber::normalize($data['phone'] ?? null);
+        $whatsapp = PhoneNumber::normalize($data['whatsapp_phone'] ?? null);
+        $whatsappOwner = $data['whatsapp_owner'] ?? null;
         $photoPath = $photo !== null ? $this->storePhoto($photo) : null;
 
-        return DB::transaction(function () use ($member, $collector, $data, $latitude, $longitude, $address, $phone, $photoPath): MemberVisit {
+        return DB::transaction(function () use ($member, $collector, $data, $latitude, $longitude, $address, $phone, $whatsapp, $whatsappOwner, $photoPath): MemberVisit {
             $visit = $member->visits()->create([
                 'user_id' => $collector->getKey(),
                 'visited_at' => now(),
@@ -71,6 +74,13 @@ class VisitService
             // kolektor yang melewatkan kolom ini tidak merusak data lama.
             if (filled($phone)) {
                 $update['phone'] = $phone;
+            }
+
+            // Keterangan pemilik hanya bermakna bila ada nomornya, jadi
+            // keduanya ditulis bersamaan.
+            if (filled($whatsapp)) {
+                $update['whatsapp_phone'] = $whatsapp;
+                $update['whatsapp_owner'] = $whatsappOwner ?? WhatsappOwner::Sendiri;
             }
 
             $member->update($update);
