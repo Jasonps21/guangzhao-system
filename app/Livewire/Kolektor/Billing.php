@@ -10,7 +10,9 @@ use App\Models\DuesRecord;
 use App\Models\Member;
 use App\Models\MemberGroup;
 use App\Support\PaymentService;
+use App\Support\PhoneNumber;
 use App\Support\VisitService;
+use Closure;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -24,6 +26,13 @@ use Livewire\WithFileUploads;
 class Billing extends Component
 {
     use WithFileUploads;
+
+    /**
+     * @var array<string, string>
+     */
+    private const PHONE_MESSAGES = [
+        'phone.required' => 'Nomor telepon wajib diisi.',
+    ];
 
     public MemberGroup $group;
 
@@ -54,6 +63,13 @@ class Billing extends Component
     public ?float $lng = null;
 
     public ?string $houseAddress = null;
+
+    /**
+     * Nomor telepon anggota — HP atau telepon rumah. Kunjungan rumah adalah
+     * satu-satunya kesempatan mengumpulkannya, jadi wajib diisi sebelum
+     * kunjungan bisa disimpan.
+     */
+    public ?string $phone = null;
 
     public string $outcome = VisitOutcome::Bertemu->value;
 
@@ -171,6 +187,13 @@ class Billing extends Component
 
         $this->activeMemberId = $memberId;
         $this->houseAddress = $member->address;
+        // Sebagian anggota menyimpan dua nomor sekaligus di kolom ini. Nilai
+        // seperti itu tidak akan lolos validasi, jadi jangan diisikan —
+        // kolektor akan terjebak pada anggota yang justru sudah punya nomor.
+        // Nomor lamanya tetap ditampilkan sebagai keterangan.
+        $this->phone = PhoneNumber::isValid($member->phone)
+            ? PhoneNumber::normalize($member->phone)
+            : null;
         $this->outcome = VisitOutcome::Bertemu->value;
         $this->note = null;
         $this->lat = null;
@@ -183,6 +206,7 @@ class Billing extends Component
     {
         $this->activeMemberId = null;
         $this->photo = null;
+        $this->phone = null;
         $this->resetErrorBag();
     }
 
@@ -194,15 +218,17 @@ class Billing extends Component
     {
         $member = $this->resolveGroupMember((int) $this->activeMemberId);
         $mustComplete = ! $member->hasCompleteLocation();
+        $this->phone = PhoneNumber::normalize($this->phone);
 
         $this->validate([
             'lat' => [$mustComplete ? 'required' : 'nullable', 'numeric', 'between:-90,90'],
             'lng' => [$mustComplete ? 'required' : 'nullable', 'numeric', 'between:-180,180'],
             'photo' => [$mustComplete ? 'required' : 'nullable', 'image', 'max:8192'],
+            'phone' => $this->phoneRules(),
             'houseAddress' => ['nullable', 'string', 'max:1000'],
             'outcome' => ['required', 'string'],
             'note' => ['nullable', 'string', 'max:1000'],
-        ], attributes: [
+        ], messages: self::PHONE_MESSAGES, attributes: [
             'lat' => 'titik GPS',
             'lng' => 'titik GPS',
             'photo' => 'foto rumah',
@@ -212,6 +238,7 @@ class Billing extends Component
             'latitude' => $this->lat,
             'longitude' => $this->lng,
             'address' => $this->houseAddress,
+            'phone' => $this->phone,
             'outcome' => $this->outcome,
             'note' => $this->note,
         ], $this->photo);
@@ -231,13 +258,15 @@ class Billing extends Component
     public function saveLocationOnly(): void
     {
         $member = $this->resolveGroupMember((int) $this->activeMemberId);
+        $this->phone = PhoneNumber::normalize($this->phone);
 
         $this->validate([
             'lat' => ['required', 'numeric', 'between:-90,90'],
             'lng' => ['required', 'numeric', 'between:-180,180'],
+            'phone' => $this->phoneRules(),
             'houseAddress' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:1000'],
-        ], attributes: [
+        ], messages: self::PHONE_MESSAGES, attributes: [
             'lat' => 'titik GPS',
             'lng' => 'titik GPS',
         ]);
@@ -246,6 +275,7 @@ class Billing extends Component
             'latitude' => $this->lat,
             'longitude' => $this->lng,
             'address' => $this->houseAddress,
+            'phone' => $this->phone,
             'outcome' => $this->outcome,
             'note' => $this->note,
         ]);
@@ -268,6 +298,21 @@ class Billing extends Component
         ]);
 
         session()->flash('billing-message', 'Lokasi '.$member->displayName().' dikonfirmasi masih sama.');
+    }
+
+    /**
+     * Aturan nomor WhatsApp, dipakai kedua jalur simpan. Bentuk sahnya
+     * ditentukan satu tempat saja, di PhoneNumber.
+     *
+     * @return array<int, mixed>
+     */
+    protected function phoneRules(): array
+    {
+        return ['required', 'string', function (string $attribute, mixed $value, Closure $fail): void {
+            if (! PhoneNumber::isValid(is_string($value) ? $value : null)) {
+                $fail('Isi satu nomor saja, HP atau telepon rumah — mis. 081234567890 atau 0411362589.');
+            }
+        }];
     }
 
     /**

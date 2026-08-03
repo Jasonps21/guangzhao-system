@@ -74,6 +74,13 @@
                                         <span>{{ $member->address }}</span>
                                     </p>
                                 @endif
+                                {{-- Pengingat menanyakan nomor sebelum panel dibuka. --}}
+                                @if (blank($member->phone))
+                                    <p class="row__nowa">
+                                        <svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>
+                                        <span>Nomor telepon belum ada</span>
+                                    </p>
+                                @endif
                             </div>
 
                             @if ($record->status === \App\Enums\DuesStatus::Lunas)
@@ -265,6 +272,23 @@
                                     @elseif ($member->housePhotoUrl())
                                         <img src="{{ $member->housePhotoUrl() }}" class="preview" alt="Foto rumah tersimpan">
                                     @endif
+                                </div>
+
+                                {{-- Kunjungan rumah adalah satu-satunya kesempatan menanyakan
+                                     nomor, jadi wajib diisi. Banyak anggota lansia hanya punya
+                                     telepon rumah, jadi nomor rumah ikut diterima. Kolom yang
+                                     berisi dua nomor sekaligus tidak diisikan otomatis (tidak
+                                     akan lolos), tapi tetap ditampilkan agar bisa dicocokkan. --}}
+                                <div class="field">
+                                    <label class="field__label" for="wa-{{ $member->id }}">Nomor Telepon / WhatsApp <span class="field__req">wajib</span></label>
+                                    <input id="wa-{{ $member->id }}" type="tel" inputmode="numeric" autocomplete="tel"
+                                        class="input" wire:model="phone" placeholder="08xxxxxxxxxx atau 0411xxxxxx">
+                                    @if (filled($member->phone) && ! \App\Support\PhoneNumber::isValid($member->phone))
+                                        <p class="hint">Tercatat sebelumnya: {{ $member->phone }} — isi satu nomor saja.</p>
+                                    @endif
+                                    @error('phone')
+                                        <p class="err"><svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>{{ $message }}</p>
+                                    @enderror
                                 </div>
 
                                 <div class="field">

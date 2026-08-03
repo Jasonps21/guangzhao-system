@@ -374,6 +374,16 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
+        /* Pengingat, bukan peringatan keras: tidak menghalangi tombol apa pun. */
+        .row__nowa {
+            display: flex;
+            align-items: center;
+            gap: .375rem;
+            margin: .375rem 0 0;
+            font-size: .8125rem;
+            font-weight: 500;
+            color: var(--warn);
+        }
         .sep {
             width: 3px;
             height: 3px;
@@ -620,6 +630,17 @@
             font-weight: 600;
             color: var(--ink-2);
             margin-bottom: .4375rem;
+        }
+        .field__req {
+            margin-left: .3125rem;
+            padding: .0625rem .375rem;
+            border-radius: var(--r-pill);
+            background: var(--warn-soft);
+            color: var(--warn);
+            font-size: .6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .03em;
         }
         .input {
             width: 100%;

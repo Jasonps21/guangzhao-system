@@ -71,7 +71,7 @@ class MemberVisitTest extends TestCase
     {
         Storage::fake('public');
         [$collector, $group] = $this->collectorWithGroup();
-        $member = Member::factory()->active()->inGroup($group)->create(['address' => 'Alamat lama']);
+        $member = Member::factory()->active()->inGroup($group)->create(['address' => 'Alamat lama', 'phone' => null]);
 
         Livewire::actingAs($collector)
             ->test(Billing::class, ['group' => $group])
@@ -79,6 +79,7 @@ class MemberVisitTest extends TestCase
             ->set('lat', -5.1476)
             ->set('lng', 119.4327)
             ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->set('phone', '081234567890')
             ->set('houseAddress', 'Jl. Baru No. 5')
             ->set('note', 'pagar hijau, sebelah warung')
             ->call('saveVisit')
@@ -89,6 +90,7 @@ class MemberVisitTest extends TestCase
         $this->assertTrue($member->hasCompleteLocation());
         $this->assertEqualsWithDelta(-5.1476, (float) $member->latitude, 0.0001);
         $this->assertSame('Jl. Baru No. 5', $member->address);
+        $this->assertSame('081234567890', $member->phone);
         $this->assertSame($collector->id, $member->location_updated_by);
         $this->assertNotNull($member->location_updated_at);
         Storage::disk('public')->assertExists($member->house_photo_path);
@@ -152,6 +154,7 @@ class MemberVisitTest extends TestCase
             ->call('openVisit', $member->id)
             ->set('lat', -5.1476)
             ->set('lng', 119.4327)
+            ->set('phone', '081234567890')
             ->set('houseAddress', 'Jl. Anuang 25C')
             ->call('saveLocationOnly')
             ->assertHasNoErrors()
@@ -180,6 +183,171 @@ class MemberVisitTest extends TestCase
             ->assertHasErrors(['lat', 'lng']);
 
         $this->assertSame(0, MemberVisit::query()->count());
+    }
+
+    public function test_a_visit_cannot_be_saved_without_a_phone_number(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->call('saveVisit')
+            ->assertHasErrors(['phone']);
+
+        $this->assertSame(0, MemberVisit::query()->count());
+    }
+
+    public function test_saving_the_gps_point_alone_also_requires_the_phone_number(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->call('saveLocationOnly')
+            ->assertHasErrors(['phone']);
+
+        $this->assertSame(0, MemberVisit::query()->count());
+    }
+
+    public function test_it_rejects_two_numbers_crammed_into_one_field(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->set('phone', '3613717 / 085343591718')
+            ->call('saveVisit')
+            ->assertHasErrors(['phone']);
+
+        $this->assertNull($member->refresh()->phone);
+    }
+
+    /**
+     * Anggota kebanyakan lansia yang hanya memakai telepon rumah — nomor
+     * seperti itu tidak boleh ditolak, kalau tidak kunjungannya buntu.
+     */
+    public function test_it_accepts_a_landline_because_many_members_have_no_mobile(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->set('phone', '0411-362589')
+            ->call('saveVisit')
+            ->assertHasNoErrors();
+
+        $this->assertSame('0411362589', $member->refresh()->phone);
+    }
+
+    public function test_it_stores_the_phone_number_in_a_tidy_format(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->set('phone', '+62 895 8034 5498')
+            ->call('saveVisit')
+            ->assertHasNoErrors();
+
+        $this->assertSame('089580345498', $member->refresh()->phone);
+    }
+
+    public function test_it_prefills_the_number_a_member_already_has(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => '082291297777']);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->assertSet('phone', '082291297777');
+    }
+
+    /**
+     * Sembilan anggota menyimpan dua nomor sekaligus di kolom ini. Bila nilai
+     * itu diisikan apa adanya, kolektor terjebak: nomor yang sudah ada di sana
+     * ditolak sistem, dan kunjungannya tidak bisa disimpan.
+     */
+    public function test_it_leaves_the_field_blank_when_the_stored_value_holds_two_numbers(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create([
+            'phone' => '3613717 / 085343591718',
+        ]);
+        DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->create([
+            'member_id' => $member->id,
+        ]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->assertSet('phone', null)
+            ->assertSee('3613717 / 085343591718');
+    }
+
+    public function test_it_prefills_a_landline_a_member_already_has(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => '0411-362589']);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->assertSet('phone', '0411362589');
+    }
+
+    public function test_the_card_flags_a_member_with_no_phone_number(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $without = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+        DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->create([
+            'member_id' => $without->id,
+        ]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->assertSee('Nomor telepon belum ada');
+    }
+
+    public function test_the_card_does_not_flag_a_member_who_already_has_a_number(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => '082291297777']);
+        DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->create([
+            'member_id' => $member->id,
+        ]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->assertDontSee('Nomor telepon belum ada');
     }
 
     /**
@@ -222,6 +390,7 @@ class MemberVisitTest extends TestCase
             ->set('lat', -5.1476)
             ->set('lng', 119.4327)
             ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->set('phone', '081234567890')
             ->call('saveVisit')
             ->assertHasNoErrors();
 
