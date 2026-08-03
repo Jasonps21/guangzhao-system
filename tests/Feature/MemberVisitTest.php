@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\CollectionMethod;
 use App\Enums\DuesStatus;
 use App\Enums\VisitOutcome;
 use App\Livewire\Kolektor\Billing;
@@ -179,5 +180,68 @@ class MemberVisitTest extends TestCase
             ->assertHasErrors(['lat', 'lng']);
 
         $this->assertSame(0, MemberVisit::query()->count());
+    }
+
+    /**
+     * Iuran yang sudah dilunasi di kantor menutup seluruh zona aksi kartu,
+     * sehingga tidak ada satu pun tombol untuk membuka panel kunjungan —
+     * lokasi rumah anggota itu jadi mustahil dilengkapi kolektor.
+     */
+    public function test_location_entry_stays_reachable_after_the_office_marked_the_dues_paid(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $admin = User::factory()->create();
+        $member = Member::factory()->active()->inGroup($group)->create();
+        DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->paid()->create([
+            'member_id' => $member->id,
+            'collection_method' => CollectionMethod::Admin,
+            'recorded_by' => $admin->id,
+        ]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->assertSeeHtml('wire:click="openVisit('.$member->id.')"');
+    }
+
+    public function test_collector_can_record_the_visit_of_a_member_already_marked_paid(): void
+    {
+        Storage::fake('public');
+        [$collector, $group] = $this->collectorWithGroup();
+        $admin = User::factory()->create();
+        $member = Member::factory()->active()->inGroup($group)->create();
+        DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->paid()->create([
+            'member_id' => $member->id,
+            'collection_method' => CollectionMethod::Admin,
+            'recorded_by' => $admin->id,
+        ]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->assertSee('Kunjungan Rumah')
+            ->set('lat', -5.1476)
+            ->set('lng', 119.4327)
+            ->set('photo', UploadedFile::fake()->image('rumah.jpg', 800, 600))
+            ->call('saveVisit')
+            ->assertHasNoErrors();
+
+        $this->assertTrue($member->refresh()->hasCompleteLocation());
+    }
+
+    public function test_a_paid_member_with_complete_location_keeps_the_change_location_action(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $admin = User::factory()->create();
+        $member = Member::factory()->active()->withLocation()->inGroup($group)->create();
+        DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->paid()->create([
+            'member_id' => $member->id,
+            'collection_method' => CollectionMethod::Admin,
+            'recorded_by' => $admin->id,
+        ]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->assertSeeHtml('wire:click="openVisit('.$member->id.')"')
+            ->assertSeeHtml('wire:click="confirmLocation('.$member->id.')"');
     }
 }

@@ -118,7 +118,24 @@
                             </div>
                         @endif
 
-                        {{-- Zona aksi utama --}}
+                        {{-- Zona aksi lokasi. Berdiri sendiri, tidak boleh ikut tertutup
+                             oleh status tagihan: iuran yang sudah dilunasi admin di kantor
+                             dulu menghapus seluruh zona aksi kartu, sehingga rumah yang
+                             belum berkoordinat mustahil dilengkapi kolektor di lapangan. --}}
+                        @unless ($member->hasCompleteLocation())
+                            <div class="actions">
+                                <p class="actions__note">
+                                    <svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>
+                                    Titik &amp; foto rumah belum ada
+                                </p>
+                                <button type="button" class="btn btn--locate" wire:click="openVisit({{ $member->id }})">
+                                    <span class="btn__label">Lengkapi Lokasi</span>
+                                    <span class="btn__ico"><svg aria-hidden="true"><use href="#i-pin"/></svg></span>
+                                </button>
+                            </div>
+                        @endunless
+
+                        {{-- Zona aksi pembayaran --}}
                         @if ($record->status === \App\Enums\DuesStatus::Lunas)
                             @if ($record->canBeUndoneBy(auth()->user()))
                                 <div class="actions">
@@ -137,18 +154,7 @@
                             @endif
                         @elseif ($record->status === \App\Enums\DuesStatus::MenungguPersetujuan)
                             {{-- Menunggu admin — tidak ada aksi kolektor. --}}
-                        @elseif (! $member->hasCompleteLocation())
-                            <div class="actions">
-                                <p class="actions__note">
-                                    <svg class="ico ico--sm" aria-hidden="true"><use href="#i-alert"/></svg>
-                                    Titik &amp; foto rumah belum ada
-                                </p>
-                                <button type="button" class="btn btn--locate" wire:click="openVisit({{ $member->id }})">
-                                    <span class="btn__label">Lengkapi Lokasi</span>
-                                    <span class="btn__ico"><svg aria-hidden="true"><use href="#i-pin"/></svg></span>
-                                </button>
-                            </div>
-                        @else
+                        @elseif ($member->hasCompleteLocation())
                             <div class="actions">
                                 <button
                                     type="button"
