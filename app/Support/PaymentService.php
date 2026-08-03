@@ -78,7 +78,7 @@ class PaymentService
                 return null;
             }
 
-            return DuesReceipt::create([
+            $receipt = DuesReceipt::create([
                 'member_id' => $member->getKey(),
                 'period_year' => $year,
                 'from_month' => (int) $paid->min('period_month'),
@@ -89,7 +89,73 @@ class PaymentService
                 'issued_by' => $by->getKey(),
                 'received_by_name' => $receivedByName,
             ]);
+
+            // Tautkan agar pembatalan nota nanti tahu persis bulan mana miliknya,
+            // tidak menebak dari rentang tanggal. {@see self::cancelReceipt()}
+            DuesRecord::whereKey($paid->pluck('id')->all())->update(['receipt_id' => $receipt->getKey()]);
+
+            return $receipt;
         });
+    }
+
+    /**
+     * Batalkan pembayaran kantor: nota dihapus dan seluruh bulan yang dilunasinya
+     * kembali BELUM BAYAR, sehingga uangnya juga keluar dari Laporan Keuangan.
+     *
+     * Hanya bulan yang benar-benar tertaut pada nota ini yang dikembalikan; bulan
+     * yang sudah lunas lebih dulu lewat jalur lain tidak ikut terbawa. Nota lama
+     * yang terbit sebelum kolom tautan ada akan jatuh ke pencocokan periode.
+     *
+     * @return int Jumlah bulan yang dikembalikan menjadi belum bayar.
+     */
+    public function cancelReceipt(DuesReceipt $receipt, User $by): int
+    {
+        return DB::transaction(function () use ($receipt, $by): int {
+            $records = $receipt->duesRecords()->get();
+
+            if ($records->isEmpty()) {
+                $records = $this->guessRecordsFor($receipt);
+            }
+
+            $reverted = $records->filter(fn (DuesRecord $record): bool => $record->revertToUnpaid());
+
+            activity()
+                ->causedBy($by)
+                ->performedOn($receipt)
+                ->withProperties([
+                    'receipt_number' => $receipt->receipt_number,
+                    'member' => $receipt->member?->displayName(),
+                    'member_number' => $receipt->member?->member_number,
+                    'period' => $receipt->periodRangeLabel(),
+                    'total_amount' => (float) $receipt->total_amount,
+                    'months_reverted' => $reverted->count(),
+                    'dues_record_ids' => $reverted->pluck('id')->all(),
+                ])
+                ->log('Nota pembayaran kantor dibatalkan');
+
+            $receipt->delete();
+
+            return $reverted->count();
+        });
+    }
+
+    /**
+     * Cari tagihan milik nota yang terbit sebelum kolom `receipt_id` ada, memakai
+     * jejak pembayaran kantor: petugas & tanggal yang sama, lewat jalur admin.
+     *
+     * @return Collection<int, DuesRecord>
+     */
+    private function guessRecordsFor(DuesReceipt $receipt): Collection
+    {
+        return DuesRecord::query()
+            ->where('member_id', $receipt->member_id)
+            ->where('period_year', $receipt->period_year)
+            ->whereBetween('period_month', [$receipt->from_month, $receipt->to_month])
+            ->where('status', DuesStatus::Lunas)
+            ->where('collection_method', CollectionMethod::Admin)
+            ->whereNull('receipt_id')
+            ->whereDate('paid_at', $receipt->issued_at)
+            ->get();
     }
 
     /**

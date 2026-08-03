@@ -270,8 +270,44 @@ class PembayaranKantor extends Page implements HasTable
                     ->icon('heroicon-o-printer')
                     ->url(fn (DuesReceipt $record): string => route('dues.receipt', $record))
                     ->openUrlInNewTab(),
+                $this->cancelReceiptAction(),
             ])
             ->defaultSort('issued_at', 'desc');
+    }
+
+    /**
+     * Membatalkan pembayaran kantor yang salah dicatat. Dibatasi Super Admin
+     * karena ini menghapus catatan uang: notanya hilang dan bulan-bulan yang
+     * dilunasinya kembali menjadi tagihan, sehingga Laporan Keuangan ikut turun.
+     */
+    protected function cancelReceiptAction(): Action
+    {
+        return Action::make('cancelReceipt')
+            ->label('Hapus')
+            ->icon(Heroicon::OutlinedTrash)
+            ->color('danger')
+            ->visible(fn (): bool => auth()->user()?->isSuperAdmin() ?? false)
+            ->requiresConfirmation()
+            ->modalHeading('Hapus Nota & Batalkan Pembayaran')
+            ->modalDescription(fn (DuesReceipt $record): string => sprintf(
+                'Nota %s atas nama %s (%s, %s bulan, Rp %s) akan dihapus, dan seluruh bulan yang dilunasinya kembali menjadi BELUM BAYAR. Uangnya juga keluar dari Laporan Keuangan. Tindakan ini tidak bisa dibatalkan.',
+                $record->receipt_number,
+                $record->member?->displayName() ?? '—',
+                $record->periodRangeLabel(),
+                $record->months_count,
+                number_format((float) $record->total_amount, 0, ',', '.'),
+            ))
+            ->modalSubmitActionLabel('Hapus & Batalkan')
+            ->action(function (DuesReceipt $record): void {
+                $number = $record->receipt_number;
+                $reverted = app(PaymentService::class)->cancelReceipt($record, auth()->user());
+
+                Notification::make()
+                    ->success()
+                    ->title('Nota '.$number.' dihapus.')
+                    ->body($reverted.' bulan dikembalikan menjadi belum bayar.')
+                    ->send();
+            });
     }
 
     /**

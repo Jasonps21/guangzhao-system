@@ -8,7 +8,10 @@ use Database\Factories\DuesReceiptFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * Nota pembayaran iuran beberapa bulan sekaligus yang dibayar langsung di
@@ -17,7 +20,7 @@ use Illuminate\Support\Carbon;
 class DuesReceipt extends Model
 {
     /** @use HasFactory<DuesReceiptFactory> */
-    use HasFactory, HasReceiptNumber;
+    use HasFactory, HasReceiptNumber, LogsActivity;
 
     protected $fillable = [
         'receipt_number',
@@ -38,6 +41,14 @@ class DuesReceipt extends Model
             'total_amount' => 'decimal:2',
             'issued_at' => 'date',
         ];
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['receipt_number', 'member_id', 'period_year', 'from_month', 'to_month', 'months_count', 'total_amount', 'issued_by'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 
     public static function receiptPrefix(): string
@@ -64,6 +75,16 @@ class DuesReceipt extends Model
     public function issuedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by');
+    }
+
+    /**
+     * Tagihan bulanan yang dilunasi oleh nota ini.
+     *
+     * @return HasMany<DuesRecord, $this>
+     */
+    public function duesRecords(): HasMany
+    {
+        return $this->hasMany(DuesRecord::class, 'receipt_id');
     }
 
     public function fromMonthLabel(): string

@@ -37,6 +37,7 @@ class DuesRecord extends Model
         'recorded_by',
         'collection_method',
         'submission_id',
+        'receipt_id',
         'notes',
     ];
 
@@ -81,6 +82,14 @@ class DuesRecord extends Model
     public function submission(): BelongsTo
     {
         return $this->belongsTo(PaymentSubmission::class, 'submission_id');
+    }
+
+    /**
+     * @return BelongsTo<DuesReceipt, $this>
+     */
+    public function receipt(): BelongsTo
+    {
+        return $this->belongsTo(DuesReceipt::class, 'receipt_id');
     }
 
     /**
@@ -136,6 +145,7 @@ class DuesRecord extends Model
             'paid_at' => null,
             'recorded_by' => null,
             'collection_method' => null,
+            'receipt_id' => null,
         ])->save();
 
         return true;
