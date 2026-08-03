@@ -17,7 +17,6 @@ use Closure;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -247,13 +246,11 @@ class Billing extends Component
             'houseAddress' => ['nullable', 'string', 'max:1000'],
             'outcome' => ['required', 'string'],
             'note' => ['nullable', 'string', 'max:1000'],
-        ], attributes: [
+        ], messages: $this->visitMessages(), attributes: [
             'lat' => 'titik GPS',
             'lng' => 'titik GPS',
             'photo' => 'foto rumah',
         ]);
-
-        $this->assertReachable();
 
         app(VisitService::class)->record($member, Auth::user(), [
             'latitude' => $this->lat,
@@ -289,12 +286,10 @@ class Billing extends Component
             ...$this->contactRules(),
             'houseAddress' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:1000'],
-        ], attributes: [
+        ], messages: $this->visitMessages(), attributes: [
             'lat' => 'titik GPS',
             'lng' => 'titik GPS',
         ]);
-
-        $this->assertReachable();
 
         app(VisitService::class)->record($member, Auth::user(), [
             'latitude' => $this->lat,
@@ -359,27 +354,42 @@ class Billing extends Component
             }
         };
 
+        // `required_without` adalah aturan implisit: ia tetap dijalankan
+        // walau kolomnya kosong. Closure biasa dilewati Laravel pada nilai
+        // kosong — padahal justru keadaan kosong itulah yang harus ditangkap.
+        // Dipasang di satu kolom saja agar galatnya muncul sekali, bukan dua.
         return [
-            'phone' => ['nullable', 'string', $single('nomor telepon')],
+            'phone' => ['required_without:whatsappPhone', 'nullable', 'string', $single('nomor telepon')],
             'whatsappPhone' => ['nullable', 'string', $single('nomor WhatsApp')],
             'whatsappOwner' => ['required', Rule::enum(WhatsappOwner::class)],
         ];
     }
 
     /**
-     * Anggota harus bisa dihubungi lewat salah satu nomor. Diperiksa terpisah
-     * dari aturan di atas: Laravel melewati closure pada kolom `nullable` yang
-     * kosong, padahal justru keadaan kosong itulah yang ingin ditangkap.
+     * Pesan galat panel kunjungan, semuanya berbahasa Indonesia — kolektor
+     * membacanya sambil berdiri di depan pintu.
+     *
+     * @return array<string, string>
      */
-    protected function assertReachable(): void
+    protected function visitMessages(): array
     {
-        if (filled($this->phone) || filled($this->whatsappPhone)) {
-            return;
-        }
-
-        throw ValidationException::withMessages([
-            'phone' => 'Isi nomor telepon atau nomor WhatsApp — minimal salah satu.',
-        ]);
+        return [
+            'lat.required' => 'Ambil titik GPS dulu dengan menekan tombol "Ambil titik GPS".',
+            'lng.required' => 'Ambil titik GPS dulu dengan menekan tombol "Ambil titik GPS".',
+            'lat.numeric' => 'Titik GPS tidak terbaca. Coba ambil ulang.',
+            'lng.numeric' => 'Titik GPS tidak terbaca. Coba ambil ulang.',
+            'lat.between' => 'Titik GPS tidak terbaca. Coba ambil ulang.',
+            'lng.between' => 'Titik GPS tidak terbaca. Coba ambil ulang.',
+            'photo.required' => 'Foto rumah belum diambil.',
+            'photo.image' => 'Berkas itu bukan foto. Ambil foto rumahnya.',
+            'photo.max' => 'Foto terlalu besar. Ambil ulang dengan kamera HP.',
+            'phone.required_without' => 'Isi nomor telepon atau nomor WhatsApp — minimal salah satu.',
+            'whatsappOwner.required' => 'Pilih dulu nomor WhatsApp itu milik siapa.',
+            'whatsappOwner.enum' => 'Pilih dulu nomor WhatsApp itu milik siapa.',
+            'houseAddress.max' => 'Alamat terlalu panjang.',
+            'note.max' => 'Catatan terlalu panjang.',
+            'outcome.required' => 'Pilih dulu hasil kunjungannya.',
+        ];
     }
 
     /**

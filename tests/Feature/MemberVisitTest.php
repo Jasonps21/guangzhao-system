@@ -51,6 +51,53 @@ class MemberVisitTest extends TestCase
         $this->assertSame(DuesStatus::BelumBayar, $record->refresh()->status);
     }
 
+    /**
+     * Kolektor menekan simpan dengan panel masih kosong. Semua yang kurang
+     * harus muncul sekaligus — sebelumnya galat titik GPS melempar lebih dulu
+     * sehingga nomor telepon tidak pernah sempat diperiksa, dan kolektor
+     * mengira nomor memang tidak wajib.
+     */
+    public function test_pressing_save_on_an_empty_panel_reports_every_missing_field_at_once(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+        DuesRecord::factory()->forPeriod((int) now()->year, (int) now()->month)->create([
+            'member_id' => $member->id,
+        ]);
+
+        Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->call('saveVisit')
+            ->assertHasErrors(['lat', 'lng', 'photo', 'phone']);
+
+        $this->assertSame(0, MemberVisit::query()->count());
+    }
+
+    /**
+     * Kolektor membaca pesan ini sambil berdiri di depan pintu — tidak boleh
+     * ada kalimat Inggris bawaan Laravel.
+     */
+    public function test_validation_messages_are_written_in_indonesian(): void
+    {
+        [$collector, $group] = $this->collectorWithGroup();
+        $member = Member::factory()->active()->inGroup($group)->create(['phone' => null]);
+
+        $component = Livewire::actingAs($collector)
+            ->test(Billing::class, ['group' => $group])
+            ->call('openVisit', $member->id)
+            ->call('saveVisit');
+
+        $errors = $component->errors()->all();
+
+        $this->assertNotEmpty($errors);
+        foreach ($errors as $message) {
+            $this->assertStringNotContainsStringIgnoringCase('field is required', $message);
+            $this->assertStringNotContainsStringIgnoringCase('must be', $message);
+            $this->assertStringNotContainsStringIgnoringCase('The selected', $message);
+        }
+    }
+
     public function test_first_visit_requires_gps_and_photo(): void
     {
         [$collector, $group] = $this->collectorWithGroup();
