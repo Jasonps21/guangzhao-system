@@ -100,17 +100,15 @@ Aman karena `groupBy(fn ($record) => $record->member->group_id)` menjamin satu
 lembar hanya berisi satu kelompok. Bila `group` bernilai `null` (anggota tanpa
 kelompok), kupon cadangan mencetak `-`, sama seperti kupon asli.
 
-**b. Ekstrak isi kupon menjadi partial** `resources/views/pdf/partials/coupon.blade.php`.
-Isi kupon asli dan cadangan hampir seluruhnya sama. Tanpa ekstraksi, ±70 baris
-markup tersalin dua kali dan kedua salinan akan menyimpang saat kupon diubah lagi.
+**b. Buat `$member` boleh `null` di dalam loop yang sudah ada.** Kupon cadangan
+adalah markup yang sama persis dengan kupon asli — hanya empat sel nilainya
+(Nama, Alamat, Iuran, No. Urut) yang bercabang. Karena itu **tidak ada markup
+yang terduplikasi**, dan mengekstraknya menjadi partial tidak punya alasan untuk
+ada: partial justru menambah satu `@include` per kupon (1.240 kali sebulan) di
+berkas yang memang sensitif terhadap kecepatan render.
 
-Kontrak partial:
-
-- **Menerima:** `$record` (`DuesRecord|null`), `$group` (`MemberGroup|null`),
-  `$organization`, `$period`, `$logo`
-- **Menghasilkan:** satu `<td class="coupon">` lengkap
-- **Perilaku:** bila `$record` bernilai `null`, empat baris data dirender sebagai
-  garis titik-titik; sisanya identik
+Perhitungan `$rowGapMm` ikut bercabang: bila `$member` bernilai `null`,
+`$namaLines` dan `$alamatLines` di-set 1 karena garis isian selalu satu baris.
 
 **c. Hapus cabang slot kosong.** `<td class="coupon empty-cell"></td>` dan kelas
 CSS `.empty-cell` tidak lagi terpakai.
@@ -174,7 +172,7 @@ Test yang sudah ada dan **harus tetap lolos tanpa diubah**:
   merujuk logo lewat path, bukan data URI.
 - `test_coupon_pdf_embeds_only_a_font_subset` — PDF tetap di bawah 2 MB.
 - `test_coupon_pins_kelompok_and_no_urut_outside_the_flowing_block` — blok
-  `.foot-box` tetap ada setelah markup dipindah ke partial.
+  `.foot-box` tetap utuh setelah baris No. Urut dibuat bercabang.
 
 ## Verifikasi manual
 
