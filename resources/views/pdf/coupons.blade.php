@@ -57,7 +57,23 @@
            height with overflow:hidden caps how far long names/addresses can push
            down, so they can never collide with the pinned bottom block. */
         .body-top { height: 46mm; overflow: hidden; }
-        .empty-cell { border: 1px solid #111; }
+        /* Garis isian pada kupon cadangan yang menempati slot sisa satu kelompok.
+           Dibuat dari border, bukan deretan karakter titik, supaya panjangnya
+           selalu pas selebar kolomnya berapa pun ukuran fontnya. Kotak kosong
+           setinggi 3,4mm dengan vertical-align baseline bawaan membuat garisnya
+           jatuh tepat di garis dasar teks — seperti isian formulir. Tanpa height
+           eksplisit, inline-block tanpa isi bisa runtuh jadi nol di DomPDF dan
+           garisnya tidak tergambar. */
+        .fill {
+            display: inline-block;
+            width: 100%;
+            height: 3.4mm;
+            border-bottom: 0.6pt dotted #333;
+        }
+        /* Iuran dan No. Urut cukup garis pendek: "Rp." dan ",-" ikut tercetak
+           mengapit garisnya, dan nomor urut paling panjang tiga angka. */
+        .fill-amount { width: 26mm; }
+        .fill-number { width: 16mm; }
 
         /* Faint centered logo watermark behind each coupon's content. Low
            opacity keeps the member data fully legible on top of it. */
@@ -184,7 +200,16 @@
                 $slots[] = $items->get($slot * $sheetCount + $sheet);
             }
 
-            $pages->push(collect($slots));
+            /*
+             * Kelompoknya ikut dibawa karena slot sisa bernilai null: kupon
+             * cadangan tetap harus mencetak nama kelompok pemilik lembar ini,
+             * padahal tidak ada anggota di slot itu untuk ditanyai. Satu lembar
+             * selalu milik satu kelompok — groupBy di atas yang menjaminnya.
+             */
+            $pages->push([
+                'group' => $items->first()->member->group,
+                'slots' => collect($slots),
+            ]);
         }
     }
 @endphp
@@ -192,15 +217,19 @@
 @forelse ($pages as $page)
     <div class="sheet">
         <table class="grid">
-            @php $rows = $page->chunk(2); @endphp
+            @php $rows = $page['slots']->chunk(2); @endphp
             @foreach ($rows as $pair)
                 <tr>
                     @foreach ($pair as $record)
-                        @if ($record === null)
-                            <td class="coupon empty-cell"></td>
-                        @else
                         @php
-                            $member = $record->member;
+                            /*
+                             * $record bernilai null pada slot sisa. Kupon tetap
+                             * dicetak utuh; hanya empat baris datanya yang jadi
+                             * garis isian, siap ditulis tangan untuk anggota baru
+                             * atau kupon yang hilang. Lembarnya toh tetap keluar
+                             * dari printer entah kotak ini diisi atau tidak.
+                             */
+                            $member = $record?->member;
 
                             /*
                              * Distribute the leftover vertical space evenly between the four
@@ -212,13 +241,21 @@
                              * ~0 gap and stays tight; .body-top clips any overflow as a guard.
                              */
                             $valueChars = 26;
-                            $nameLatin = ($member->name_indonesian ?: $member->name_pinyin) ?? '';
-                            $namaWidth = mb_strlen($member->name_hanzi ?? '') * 2 + mb_strlen($nameLatin)
-                                + ($member->name_indonesian && $member->name_pinyin ? mb_strlen($member->name_pinyin) + 3 : 0);
-                            $namaLines = max(1, (int) ceil($namaWidth / $valueChars));
+                            $alamatText = '-';
 
-                            $alamatText = $member->address ? \Illuminate\Support\Str::limit($member->address, 48) : '-';
-                            $alamatLines = max(1, (int) ceil(mb_strlen($alamatText) / $valueChars));
+                            if ($member !== null) {
+                                $nameLatin = ($member->name_indonesian ?: $member->name_pinyin) ?? '';
+                                $namaWidth = mb_strlen($member->name_hanzi ?? '') * 2 + mb_strlen($nameLatin)
+                                    + ($member->name_indonesian && $member->name_pinyin ? mb_strlen($member->name_pinyin) + 3 : 0);
+                                $namaLines = max(1, (int) ceil($namaWidth / $valueChars));
+
+                                $alamatText = $member->address ? \Illuminate\Support\Str::limit($member->address, 48) : '-';
+                                $alamatLines = max(1, (int) ceil(mb_strlen($alamatText) / $valueChars));
+                            } else {
+                                // Garis isian selalu satu baris, jadi jaraknya melebar penuh.
+                                $namaLines = 1;
+                                $alamatLines = 1;
+                            }
 
                             $usedMm = ($namaLines + $alamatLines + 2) * 5.2;
                             $rowGapMm = round(max(0.0, 31 - $usedMm) / 4, 2);
@@ -238,20 +275,20 @@
                                 </div>
 
                                 <table class="info">
-                                    <tr style="padding-bottom: {{ $rowGapMm }}mm;">
+                                    <tr>
                                         <td class="label" style="padding-bottom: {{ $rowGapMm }}mm;">Nama</td>
                                         <td class="sep">:</td>
-                                        <td style="padding-bottom: {{ $rowGapMm }}mm;">@if ($member->name_hanzi)<span class="hz">{{ $member->name_hanzi }}</span> @endif{{ $member->name_indonesian ?: $member->name_pinyin }}@if ($member->name_indonesian && $member->name_pinyin)<span class="pinyin"> ({{ $member->name_pinyin }})</span>@endif</td>
+                                        <td style="padding-bottom: {{ $rowGapMm }}mm;">@if ($member)@if ($member->name_hanzi)<span class="hz">{{ $member->name_hanzi }}</span> @endif{{ $member->name_indonesian ?: $member->name_pinyin }}@if ($member->name_indonesian && $member->name_pinyin)<span class="pinyin"> ({{ $member->name_pinyin }})</span>@endif@else<span class="fill"></span>@endif</td>
                                     </tr>
                                     <tr>
                                         <td class="label" style="padding-bottom: {{ $rowGapMm }}mm;">Alamat</td>
                                         <td class="sep">:</td>
-                                        <td style="padding-bottom: {{ $rowGapMm }}mm;">{{ $alamatText }}</td>
+                                        <td style="padding-bottom: {{ $rowGapMm }}mm;">@if ($member){{ $alamatText }}@else<span class="fill"></span>@endif</td>
                                     </tr>
                                     <tr>
                                         <td class="label" style="padding-bottom: {{ $rowGapMm }}mm;">Iuran</td>
                                         <td class="sep">:</td>
-                                        <td style="padding-bottom: {{ $rowGapMm }}mm;"><span class="amount">Rp.{{ number_format($record->amount_due, 0, ',', '.') }},-</span></td>
+                                        <td style="padding-bottom: {{ $rowGapMm }}mm;"><span class="amount">Rp.@if ($member){{ number_format($record->amount_due, 0, ',', '.') }}@else<span class="fill fill-amount"></span>@endif,-</span></td>
                                     </tr>
                                     <tr>
                                         <td class="label">Bulan</td>
@@ -266,12 +303,12 @@
                                         <tr>
                                             <td class="label">Kelompok</td>
                                             <td class="sep">:</td>
-                                            <td>{{ $member->group?->name ?? '-' }}</td>
+                                            <td>{{ $page['group']?->name ?? '-' }}</td>
                                         </tr>
                                         <tr>
                                             <td class="label">No. Urut</td>
                                             <td class="sep">:</td>
-                                            <td>{{ $member->no_urut ?? '-' }}</td>
+                                            <td>@if ($member){{ $member->no_urut ?? '-' }}@else<span class="fill fill-number"></span>@endif</td>
                                         </tr>
                                     </table>
                                 </div>
@@ -294,11 +331,7 @@
                                 </div>
                             </div>
                         </td>
-                        @endif
                     @endforeach
-                    @if ($pair->count() === 1)
-                        <td class="coupon empty-cell"></td>
-                    @endif
                 </tr>
             @endforeach
         </table>

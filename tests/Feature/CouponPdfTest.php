@@ -284,6 +284,156 @@ class CouponPdfTest extends TestCase
         );
     }
 
+    /**
+     * Slot yang melewati jumlah anggota tidak boleh tercetak polos. Lembarnya
+     * tetap keluar dari printer entah kotaknya diisi atau tidak, jadi mengisinya
+     * dengan kupon siap tulis tidak memakan kertas tambahan sama sekali —
+     * bedanya hanya hasil potongannya berguna, bukan jadi kertas buangan.
+     */
+    public function test_leftover_slots_are_filled_with_ready_to_write_spare_coupons(): void
+    {
+        $group = MemberGroup::factory()->create(['name' => 'Kelompok 5']);
+
+        // 12 anggota → P = ceil(12/10) = 2 lembar = 20 slot, jadi 8 slot sisa.
+        foreach (range(1, 12) as $number) {
+            $member = Member::factory()->active()->create([
+                'group_id' => $group->id,
+                'no_urut' => $number,
+            ]);
+            DuesRecord::factory()->create([
+                'member_id' => $member->id,
+                'period_year' => 2025,
+                'period_month' => 12,
+            ]);
+        }
+
+        $html = $this->renderCouponsHtml();
+
+        $this->assertStringNotContainsString(
+            'empty-cell',
+            $html,
+            'Masih ada kotak polos — slot sisa belum jadi kupon cadangan.',
+        );
+        $this->assertSame(
+            20,
+            substr_count($html, 'class="inner"'),
+            'Tiap slot harus berisi kupon utuh: 12 asli + 8 cadangan.',
+        );
+        // Dihitung dari atribut class-nya, bukan dari 'fill-number' saja —
+        // deklarasi CSS-nya sendiri mengandung kata itu dan ikut terhitung.
+        $this->assertSame(
+            8,
+            substr_count($html, 'class="fill fill-number"'),
+            'Delapan slot sisa harus jadi delapan kupon cadangan.',
+        );
+    }
+
+    /**
+     * Bulan dan Kelompok sudah pasti diketahui saat mencetak, jadi keduanya
+     * ikut tercetak di kupon cadangan supaya petugas cukup menulis empat hal.
+     */
+    public function test_spare_coupons_carry_the_period_and_the_group(): void
+    {
+        $group = MemberGroup::factory()->create(['name' => 'Kelompok 5']);
+        $member = Member::factory()->active()->create([
+            'group_id' => $group->id,
+            'no_urut' => 1,
+        ]);
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+        ]);
+
+        $html = $this->renderCouponsHtml();
+
+        // 1 kupon asli + 9 cadangan, semuanya membawa periode dan kelompoknya.
+        $this->assertSame(10, substr_count($html, 'Desember 2025'));
+        $this->assertSame(10, substr_count($html, 'Kelompok 5'));
+        $this->assertSame(9, substr_count($html, 'class="fill fill-number"'));
+    }
+
+    /**
+     * Data anggota tidak boleh menular ke kotak sebelahnya saat slot sisa
+     * dirender — kupon cadangan harus benar-benar kosong pada empat baris itu.
+     */
+    public function test_spare_coupons_leave_the_member_fields_blank(): void
+    {
+        $group = MemberGroup::factory()->create(['name' => 'Kelompok 5']);
+        $member = Member::factory()->active()->create([
+            'group_id' => $group->id,
+            'no_urut' => 7,
+            'name_hanzi' => null,
+            'name_pinyin' => null,
+            'name_indonesian' => 'Budi Santoso',
+            'address' => 'Jl. Somba Opu 12',
+        ]);
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+            'amount_due' => 15000,
+        ]);
+
+        $html = $this->renderCouponsHtml();
+
+        $this->assertSame(1, substr_count($html, 'Budi Santoso'));
+        $this->assertSame(1, substr_count($html, 'Jl. Somba Opu 12'));
+        $this->assertSame(1, substr_count($html, 'Rp.15.000,-'));
+        $this->assertSame(9, substr_count($html, 'class="fill fill-amount"'));
+        $this->assertSame(9, substr_count($html, 'class="fill fill-number"'));
+    }
+
+    /**
+     * Menambah lembar hanya demi menghasilkan cadangan justru memboroskan
+     * kertas — persis keberatan yang membuat fitur ini dibuat.
+     */
+    public function test_a_group_that_fills_the_sheet_gets_no_spare_coupons(): void
+    {
+        $group = MemberGroup::factory()->create(['name' => 'Kelompok 2']);
+
+        foreach (range(1, 10) as $number) {
+            $member = Member::factory()->active()->create([
+                'group_id' => $group->id,
+                'no_urut' => $number,
+            ]);
+            DuesRecord::factory()->create([
+                'member_id' => $member->id,
+                'period_year' => 2025,
+                'period_month' => 12,
+            ]);
+        }
+
+        $html = $this->renderCouponsHtml();
+
+        $this->assertSame(10, substr_count($html, 'class="inner"'));
+        $this->assertStringNotContainsString('class="fill fill-number"', $html);
+        $this->assertStringNotContainsString('page-break-after', $html);
+    }
+
+    /**
+     * HTML kupon periode Desember 2025, diurutkan seperti PdfController.
+     */
+    private function renderCouponsHtml(): string
+    {
+        $records = DuesRecord::query()
+            ->with(['member.group'])
+            ->forPeriod(2025, 12)
+            ->get()
+            ->sortBy(fn (DuesRecord $record) => [
+                $record->member->group?->name,
+                $record->member->no_urut ?? PHP_INT_MAX,
+            ])
+            ->values();
+
+        return view('pdf.coupons', [
+            'records' => $records,
+            'period' => 'Desember 2025',
+            'organization' => OrganizationSetting::current(),
+            'logo' => null,
+        ])->render();
+    }
+
     public function test_coupon_name_shows_indonesian_prominently_with_small_pinyin(): void
     {
         $member = Member::factory()->active()->create([
