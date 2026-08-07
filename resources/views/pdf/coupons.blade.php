@@ -60,14 +60,20 @@
         /* Garis isian pada kupon cadangan yang menempati slot sisa satu kelompok.
            Dibuat dari border, bukan deretan karakter titik, supaya panjangnya
            selalu pas selebar kolomnya berapa pun ukuran fontnya. Kotak kosong
-           setinggi 3,4mm dengan vertical-align baseline bawaan membuat garisnya
-           jatuh tepat di garis dasar teks — seperti isian formulir. Tanpa height
-           eksplisit, inline-block tanpa isi bisa runtuh jadi nol di DomPDF dan
-           garisnya tidak tergambar. */
+           kosong perlu height eksplisit: tanpa itu inline-block tanpa isi runtuh
+           jadi nol di DomPDF dan garisnya tidak tergambar sama sekali.
+
+           Tingginya 4,2mm karena DomPDF menempatkan inline-block dari sisi ATAS
+           kotak barisnya, bukan dari garis dasar seperti browser. Angka itu kira-
+           kira setinggi ascender font 14pt, sehingga tepi bawahnya — garisnya —
+           jatuh sejajar garis dasar label di sebelahnya, seperti isian formulir.
+           Pada 3,4mm garisnya mengambang ±0,8mm di atas baseline. Bila ukuran
+           font table.info berubah, angka ini harus disetel ulang lewat render
+           PDF sungguhan. */
         .fill {
             display: inline-block;
             width: 100%;
-            height: 3.4mm;
+            height: 4.2mm;
             border-bottom: 0.6pt dotted #333;
         }
         /* Iuran dan No. Urut cukup garis pendek: "Rp." dan ",-" ikut tercetak
