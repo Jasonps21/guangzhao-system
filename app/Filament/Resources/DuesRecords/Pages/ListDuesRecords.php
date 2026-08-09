@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\DuesRecords\Pages;
 
 use App\Filament\Resources\DuesRecords\DuesRecordResource;
+use App\Models\Member;
 use App\Models\MemberGroup;
 use App\Support\DuesGenerator;
 use Filament\Actions\Action;
@@ -79,6 +80,43 @@ class ListDuesRecords extends ListRecords
                     'group' => $data['group_id'],
                 ])),
 
+            // Kupon robek / kena air, dan anggota yang tagihannya belum
+            // digenerate. Sengaja tombol terpisah dari cetak per kelompok:
+            // pilihannya per nama dan bebas lintas kelompok.
+            Action::make('printSelectedCoupons')
+                ->label('Cetak Kupon Anggota Tertentu')
+                ->icon('heroicon-o-printer')
+                ->color('gray')
+                ->modalDescription('Untuk kupon yang robek atau rusak, dan anggota yang tagihannya belum digenerate. Boleh memilih lintas kelompok — semuanya dicetak dalam satu tumpukan.')
+                ->modalSubmitActionLabel('Siapkan Kupon')
+                ->schema([
+                    TextInput::make('year')
+                        ->label('Tahun')
+                        ->numeric()
+                        ->default((int) now()->year)
+                        ->required(),
+                    Select::make('month')
+                        ->label('Bulan')
+                        ->options(self::monthOptions())
+                        ->default((int) now()->month)
+                        ->required(),
+                    Select::make('member_ids')
+                        ->label('Anggota')
+                        ->helperText('Cari nama atau nomor anggota. Boleh beberapa sekaligus, dan tidak harus satu kelompok.')
+                        ->multiple()
+                        ->searchable()
+                        ->required()
+                        // Sengaja tanpa ->preload(): 1.240 anggota terlalu berat
+                        // untuk dimuat sekaligus di dropdown.
+                        ->getSearchResultsUsing(fn (string $search): array => self::searchMembers($search))
+                        ->getOptionLabelsUsing(fn (array $values): array => self::memberLabels($values)),
+                ])
+                ->action(fn (array $data) => redirect()->route('dues.coupons.selected', [
+                    'year' => $data['year'],
+                    'month' => $data['month'],
+                    'members' => $data['member_ids'],
+                ])),
+
             CreateAction::make(),
         ];
     }
@@ -94,5 +132,56 @@ class ListDuesRecords extends ListRecords
         }
 
         return $months;
+    }
+
+    /**
+     * Hasil pencarian anggota aktif, dibatasi agar dropdown tetap ringan.
+     *
+     * @return array<int, string>
+     */
+    protected static function searchMembers(string $search): array
+    {
+        return Member::query()
+            ->with('group')
+            ->active()
+            ->searchByNameOrNumber($search)
+            ->orderBy('name_indonesian')
+            ->limit(50)
+            ->get()
+            ->mapWithKeys(fn (Member $member): array => [$member->getKey() => self::memberLabel($member)])
+            ->all();
+    }
+
+    /**
+     * Label anggota yang sudah terpilih, supaya tetap terbaca saat modal dibuka
+     * ulang — hasil pencarian tidak lagi tersedia saat itu.
+     *
+     * @param  array<int, int|string>  $values
+     * @return array<int, string>
+     */
+    protected static function memberLabels(array $values): array
+    {
+        return Member::query()
+            ->with('group')
+            ->whereKey($values)
+            ->get()
+            ->mapWithKeys(fn (Member $member): array => [$member->getKey() => self::memberLabel($member)])
+            ->all();
+    }
+
+    /**
+     * Nama, nomor anggota, dan kelompoknya — supaya nama yang mirip tetap bisa
+     * dibedakan saat memilih.
+     */
+    protected static function memberLabel(Member $member): string
+    {
+        $name = $member->name_indonesian ?: ($member->name_pinyin ?: $member->name_hanzi);
+
+        return sprintf(
+            '%s — %s · %s',
+            $name ?: '(tanpa nama)',
+            $member->member_number,
+            $member->group?->name ?? 'Tanpa Kelompok',
+        );
     }
 }

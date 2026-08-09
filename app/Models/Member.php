@@ -193,6 +193,22 @@ class Member extends Model
         $query->where('status', MemberStatus::Aktif);
     }
 
+    /**
+     * Pencarian anggota untuk pemilih kupon — nama Indonesia, pinyin, hanzi,
+     * atau nomor anggota. Dropdown "Cetak Kupon Anggota Tertentu" memakainya
+     * karena memuat 1.240 anggota sekaligus terlalu berat.
+     *
+     * @param  Builder<Member>  $query
+     */
+    public function scopeSearchByNameOrNumber(Builder $query, string $term): void
+    {
+        $query->where(function (Builder $inner) use ($term): void {
+            foreach (['name_indonesian', 'name_pinyin', 'name_hanzi', 'member_number'] as $column) {
+                $inner->orWhere($column, 'like', '%'.$term.'%');
+            }
+        });
+    }
+
     public function isActive(): bool
     {
         return $this->status === MemberStatus::Aktif;

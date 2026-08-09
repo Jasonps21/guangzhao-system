@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\DuesRecords\Pages\ListDuesRecords;
 use App\Models\DuesRecord;
 use App\Models\Member;
 use App\Models\MemberGroup;
@@ -9,6 +10,7 @@ use App\Models\OrganizationSetting;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class SelectedCouponTest extends TestCase
@@ -163,6 +165,60 @@ class SelectedCouponTest extends TestCase
         $response->assertOk();
         $this->assertSame('application/pdf', $response->headers->get('content-type'));
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_member_search_matches_name_or_number(): void
+    {
+        Member::factory()->active()->create([
+            'name_indonesian' => 'Budi Santoso',
+            'member_number' => 'GZ-001',
+        ]);
+        Member::factory()->active()->create([
+            'name_indonesian' => 'Siti Rahayu',
+            'member_number' => 'GZ-002',
+        ]);
+
+        $byName = Member::query()->searchByNameOrNumber('budi')->pluck('name_indonesian')->all();
+        $byNumber = Member::query()->searchByNameOrNumber('GZ-002')->pluck('name_indonesian')->all();
+
+        $this->assertSame(['Budi Santoso'], $byName);
+        $this->assertSame(['Siti Rahayu'], $byNumber);
+    }
+
+    public function test_the_action_redirects_to_the_selected_coupon_route(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $first = Member::factory()->active()->create();
+        $second = Member::factory()->active()->create();
+
+        Livewire::actingAs($admin)
+            ->test(ListDuesRecords::class)
+            ->callAction('printSelectedCoupons', data: [
+                'year' => 2025,
+                'month' => 12,
+                'member_ids' => [$first->id, $second->id],
+            ])
+            ->assertHasNoActionErrors()
+            ->assertRedirect(route('dues.coupons.selected', [
+                'year' => 2025,
+                'month' => 12,
+                'members' => [$first->id, $second->id],
+            ]));
+    }
+
+    public function test_the_action_requires_at_least_one_member(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        Livewire::actingAs($admin)
+            ->test(ListDuesRecords::class)
+            ->callAction('printSelectedCoupons', data: [
+                'year' => 2025,
+                'month' => 12,
+                'member_ids' => [],
+            ])
+            ->assertHasActionErrors(['member_ids' => 'required'])
+            ->assertNoRedirect();
     }
 
     /**
