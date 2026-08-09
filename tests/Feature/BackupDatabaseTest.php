@@ -91,6 +91,75 @@ class BackupDatabaseTest extends TestCase
         $this->assertSame($expected, $restored);
     }
 
+    public function test_backups_older_than_the_keep_window_are_removed(): void
+    {
+        $old = $this->path.'/guangzhao-20200101-000000.sql.gz';
+        File::put($old, 'backup lama');
+        touch($old, now()->subDays(31)->getTimestamp());
+
+        $this->artisan('backup:database', ['--path' => $this->path, '--keep' => 30])
+            ->assertSuccessful();
+
+        $this->assertFileDoesNotExist($old);
+    }
+
+    public function test_backups_inside_the_keep_window_are_left_alone(): void
+    {
+        $recent = $this->path.'/guangzhao-20200101-000001.sql.gz';
+        File::put($recent, 'backup baru');
+        touch($recent, now()->subDays(29)->getTimestamp());
+
+        $this->artisan('backup:database', ['--path' => $this->path, '--keep' => 30])
+            ->assertSuccessful();
+
+        $this->assertFileExists($recent);
+    }
+
+    /**
+     * Folder backup di server bercampur milik aplikasi lain — termasuk sebuah
+     * arsip 342 MB. Pemangkasan tidak boleh pernah menyentuh apa pun di luar
+     * pola namanya sendiri.
+     */
+    public function test_files_that_are_not_our_backups_are_never_touched(): void
+    {
+        $foreign = $this->path.'/meddiag-files-backup-20260722.tar.gz';
+        $oddName = $this->path.'/guangzhao-catatan.sql.gz';
+
+        File::put($foreign, 'milik aplikasi lain');
+        File::put($oddName, 'bukan pola backup');
+        touch($foreign, now()->subYears(2)->getTimestamp());
+        touch($oddName, now()->subYears(2)->getTimestamp());
+
+        $this->artisan('backup:database', ['--path' => $this->path, '--keep' => 1])
+            ->assertSuccessful();
+
+        $this->assertFileExists($foreign);
+        $this->assertFileExists($oddName);
+    }
+
+    /**
+     * Yang paling merugikan bukan dump yang gagal, melainkan dump gagal yang
+     * tetap memangkas: backup lama hilang dan penggantinya tidak ada.
+     */
+    public function test_a_failed_dump_neither_prunes_nor_reports_success(): void
+    {
+        $old = $this->path.'/guangzhao-20200101-000000.sql.gz';
+        File::put($old, 'backup lama');
+        touch($old, now()->subDays(365)->getTimestamp());
+
+        // Nama database yang tidak ada membuat mysqldump gagal secara
+        // deterministik di mesin mana pun. Mengubah port saja tidak cukup:
+        // dengan host `localhost`, MySQL menyambung lewat unix socket dan
+        // mengabaikan port sepenuhnya.
+        config(['database.connections.'.config('database.default').'.database' => 'db_yang_tidak_pernah_ada']);
+
+        $this->artisan('backup:database', ['--path' => $this->path, '--keep' => 30])
+            ->assertFailed();
+
+        $this->assertFileExists($old, 'Backup lama tidak boleh dihapus saat dump gagal.');
+        $this->assertCount(1, File::files($this->path), 'Berkas dump yang gagal harus dibersihkan.');
+    }
+
     /**
      * Satu-satunya berkas backup di folder uji.
      */

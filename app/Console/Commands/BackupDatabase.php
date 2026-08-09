@@ -45,13 +45,19 @@ class BackupDatabase extends Command
 
             $this->error('Backup gagal: '.$exception->getMessage());
 
+            // Pemangkasan sengaja TIDAK dijalankan di sini. Memangkas setelah
+            // dump gagal menghapus backup lama tanpa ada penggantinya.
             return self::FAILURE;
         }
 
+        $removed = $this->prune($path, $keepDays);
+
         $this->info(sprintf(
-            'Backup dibuat: %s (%s KB).',
+            'Backup dibuat: %s (%s KB). %d backup lebih tua dari %d hari dihapus.',
             basename($file),
             number_format(filesize($file) / 1024, 1),
+            $removed,
+            $keepDays,
         ));
 
         return self::SUCCESS;
@@ -146,5 +152,41 @@ class BackupDatabase extends Command
         if (! str_contains($tail, '-- Dump completed')) {
             throw new RuntimeException('dump tidak selesai — penanda "-- Dump completed" tidak ada.');
         }
+    }
+
+    /**
+     * Hanya berkas backup milik aplikasi ini yang boleh dihapus.
+     *
+     * Folder tujuan di server bercampur dengan backup aplikasi lain, jadi
+     * pemangkasan dibatasi tiga syarat sekaligus: berada langsung di folder itu
+     * (glob tidak rekursif), namanya cocok pola persis, dan mtime-nya sudah
+     * lewat. Direktori tidak pernah disentuh.
+     */
+    private function prune(string $path, int $keepDays): int
+    {
+        $cutoff = now()->subDays($keepDays)->getTimestamp();
+        $removed = 0;
+
+        foreach ((array) glob($path.'/guangzhao-*.sql.gz') as $candidate) {
+            if (! is_file($candidate)) {
+                continue;
+            }
+
+            // Pola diperiksa ulang agar berkas seperti "guangzhao-catatan.sql.gz"
+            // yang lolos glob tidak ikut terhapus.
+            if (preg_match('/^guangzhao-\d{8}-\d{6}\.sql\.gz$/', basename($candidate)) !== 1) {
+                continue;
+            }
+
+            if (filemtime($candidate) > $cutoff) {
+                continue;
+            }
+
+            if (unlink($candidate)) {
+                $removed++;
+            }
+        }
+
+        return $removed;
     }
 }
