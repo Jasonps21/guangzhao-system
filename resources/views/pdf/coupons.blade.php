@@ -80,6 +80,10 @@
            mengapit garisnya, dan nomor urut paling panjang tiga angka. */
         .fill-amount { width: 26mm; }
         .fill-number { width: 16mm; }
+        /* Kelompok dikosongkan hanya pada lembar campur kelompok (cetak anggota
+           tertentu). Nama kelompok terpanjang di data nyata adalah "Kelompok 10
+           (Bebas Iuran)", jadi garisnya dibuat selebar itu. */
+        .fill-group { width: 26mm; }
 
         /* Faint centered logo watermark behind each coupon's content. Low
            opacity keeps the member data fully legible on top of it. */
@@ -193,9 +197,20 @@
      * slot ke-s (0-based, urutan baca 0..9) di lembar ke-p berisi anggota
      * indeks s*P + p. Slot yang melewati N dirender sebagai kupon kosong.
      */
+    /*
+     * Cetak per kelompok memisah lembar tiap ganti kelompok. Cetak anggota
+     * tertentu tidak: pilihannya memang lintas kelompok, dan tiga nama dari tiga
+     * kelompok harus muat di satu lembar, bukan tiga lembar yang hampir kosong.
+     */
+    $splitPerGroup = $splitPerGroup ?? true;
+
+    $sheetGroups = $splitPerGroup
+        ? $records->groupBy(fn ($record) => $record->member->group_id)
+        : collect([$records]);
+
     $pages = collect();
 
-    foreach ($records->groupBy(fn ($record) => $record->member->group_id) as $groupRecords) {
+    foreach ($sheetGroups as $groupRecords) {
         $items = $groupRecords->values();
         $sheetCount = (int) ceil($items->count() / 10);
 
@@ -207,13 +222,12 @@
             }
 
             /*
-             * Kelompoknya ikut dibawa karena slot sisa bernilai null: kupon
-             * cadangan tetap harus mencetak nama kelompok pemilik lembar ini,
-             * padahal tidak ada anggota di slot itu untuk ditanyai. Satu lembar
-             * selalu milik satu kelompok — groupBy di atas yang menjaminnya.
+             * Kelompok lembar hanya dipakai kupon cadangan, yang tidak punya
+             * anggota untuk ditanyai. Pada lembar campur kelompok nilainya null
+             * dan barisnya jadi garis isian.
              */
             $pages->push([
-                'group' => $items->first()->member->group,
+                'group' => $splitPerGroup ? $items->first()->member->group : null,
                 'slots' => collect($slots),
             ]);
         }
@@ -309,7 +323,7 @@
                                         <tr>
                                             <td class="label">Kelompok</td>
                                             <td class="sep">:</td>
-                                            <td>{{ $page['group']?->name ?? '-' }}</td>
+                                            <td>@if ($member){{ $member->group?->name ?? '-' }}@elseif ($page['group']){{ $page['group']->name }}@else<span class="fill fill-group"></span>@endif</td>
                                         </tr>
                                         <tr>
                                             <td class="label">No. Urut</td>
