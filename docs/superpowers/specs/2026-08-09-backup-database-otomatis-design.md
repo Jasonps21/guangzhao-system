@@ -115,14 +115,12 @@ ke subfolder tersendiri, `~/backups/guangzhao/`, bukan ke folder campur tersebut
 
 Backup berjalan **setiap hari pukul 18:00 WITA**.
 
-Server berzona **UTC**, sehingga baris crontab-nya `0 10 * * *`. Ditulis `0 18`
-akan menjalankan backup pukul 2 dini hari waktu Makassar. Crontab diberi komentar
-eksplisit agar tidak ada yang "membetulkannya" kelak.
+Server sudah berzona `Asia/Makassar` (lihat "Perubahan zona waktu server" di
+bawah), sehingga baris crontab-nya langsung `0 18 * * *`.
 
 ```cron
-# Backup DB guangzhao — 10:00 UTC = 18:00 WITA. Server berzona UTC; jangan
-# diubah jadi 18 kecuali zona waktu server ikut berubah.
-0 10 * * * cd /home/root_test/guangzhao-system && php artisan backup:database --path=/home/root_test/backups/guangzhao --keep=30 >> /home/root_test/backups/guangzhao/backup.log 2>&1
+# Backup DB guangzhao setiap hari 18:00 WITA. Server berzona Asia/Makassar.
+0 18 * * * cd /home/root_test/guangzhao-system && php artisan backup:database --path=/home/root_test/backups/guangzhao --keep=30 >> /home/root_test/backups/guangzhao/backup.log 2>&1
 ```
 
 Baris scheduler `crm-wa` yang sudah ada tetap utuh.
@@ -131,9 +129,36 @@ Cron langsung dipakai, bukan Laravel scheduler: guangzhao tidak punya scheduled
 task lain, sedangkan scheduler menuntut proses PHP setiap menit. Satu pekerjaan
 harian tidak sepadan dengan biaya itu di VPS yang disknya 68% penuh.
 
-Nama berkas memakai jam UTC (`-100000`) agar cocok dengan `ls` di server.
-Tanggal kalendernya tetap sama dengan tanggal WITA, karena 18:00 WITA dan 10:00
-UTC jatuh di hari yang sama.
+Nama berkas memakai jam **UTC**, karena `now()` mengikuti `app.timezone` yang
+tetap UTC dan tidak diubah — seluruh timestamp yang ditulis aplikasi ini juga
+UTC. Backup pukul 18:00 WITA karena itu bernama `guangzhao-YYYYMMDD-100000...`.
+Ini disengaja: nama berkas sejajar dengan timestamp di dalam database, yang
+merupakan properti yang benar-benar berguna saat mencocokkan sebuah backup
+dengan baris data. Tanggal kalendernya tetap sama dengan tanggal WITA, karena
+18:00 WITA dan 10:00 UTC jatuh di hari yang sama. Ringkasan yang dicetak command
+menyebut kedua jam agar tidak membingungkan.
+
+## Perubahan zona waktu server (2026-08-09)
+
+Atas permintaan pemilik sistem, zona waktu server diubah dari UTC ke
+`Asia/Makassar`, dan MariaDB ikut dipatok ke WITA. Urutan dan waktunya dicatat
+karena memengaruhi pembacaan data lama:
+
+| Waktu (UTC) | Tindakan |
+|---|---|
+| 2026-08-09 07:48:24 | `timedatectl set-timezone Asia/Makassar` |
+| 2026-08-09 07:48:5x | `systemctl restart cron` agar cron membaca zona baru |
+| 2026-08-09 07:55:35 | `SET GLOBAL time_zone = '+08:00'` + drop-in `/etc/mysql/mariadb.conf.d/99-timezone.cnf` |
+
+Sebelum 2026-08-09 07:55 UTC, `NOW()` dan `CURRENT_TIMESTAMP` menghasilkan UTC;
+sesudahnya WITA. MariaDB dipatok `+08:00` secara eksplisit, bukan dibiarkan
+`SYSTEM`, agar jamnya tidak bergeser diam-diam bila zona OS berubah lagi.
+
+Aplikasi ini **tidak terpengaruh**: seluruh timestamp-nya ditulis dari PHP
+(`Carbon::now()`) mengikuti `app.timezone` yang tetap UTC, dan tidak ada satu pun
+`NOW()` SQL mentah di kodenya. Satu-satunya kolom guangzhao yang benar-benar
+mengandalkan `DEFAULT CURRENT_TIMESTAMP` adalah `failed_jobs.failed_at`, yang
+bersifat diagnostik.
 
 ## Pengujian
 
