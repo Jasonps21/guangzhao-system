@@ -103,6 +103,86 @@ class PdfController extends Controller
     }
 
     /**
+     * Kupon iuran untuk anggota yang dipilih satu per satu — untuk kupon yang
+     * robek atau kena air, dan untuk anggota yang tagihannya belum digenerate.
+     *
+     * Pilihannya boleh lintas kelompok, jadi lembarnya tidak dipisah per
+     * kelompok: tiga nama dari tiga kelompok muat di satu lembar, bukan tiga
+     * lembar yang hampir kosong semua. Tidak di-cache seperti cetak per
+     * kelompok — hasilnya umumnya satu lembar, dan tanpa cache setiap cetak
+     * ulang otomatis memakai data anggota terbaru.
+     */
+    public function selectedCoupons(Request $request): Response
+    {
+        $year = (int) $request->integer('year', (int) now()->year);
+        $month = (int) $request->integer('month', (int) now()->month);
+        /** @var list<int> $memberIds */
+        $memberIds = array_map('intval', (array) $request->input('members', []));
+
+        $organization = OrganizationSetting::current();
+
+        $pdf = $this->render('pdf.coupons', [
+            'records' => $this->recordsForMembers($year, $month, $memberIds),
+            'period' => Carbon::create($year, $month, 1)->translatedFormat('F Y'),
+            'organization' => $organization,
+            // Watermark diulang di tiap kupon — pakai path, bukan data URI. (§logoPath)
+            'logo' => $this->logoPath($organization),
+            'splitPerGroup' => false,
+        ])->setPaper([0, 0, 609.45, 935.43]); // F4 215×330mm in points
+
+        return $pdf->stream('kupon-pilihan-'.$year.'-'.$month.'.pdf');
+    }
+
+    /**
+     * Tagihan periode tersebut untuk anggota terpilih, siap dicetak.
+     *
+     * Anggota yang belum punya tagihan tetap dapat kupon: dibuatkan objek
+     * tagihan yang TIDAK disimpan, bernominal iuran bulanan dari master data —
+     * sumber yang sama dipakai DuesGenerator. Mencetak kupon bukan menagih,
+     * jadi tidak ada satu baris pun yang ditulis ke database.
+     *
+     * Status anggota disaring di sini, bukan hanya di pencarian, supaya id yang
+     * diketik langsung di URL pun tidak menembusnya.
+     *
+     * @param  list<int>  $memberIds
+     * @return Collection<int, DuesRecord>
+     */
+    private function recordsForMembers(int $year, int $month, array $memberIds): Collection
+    {
+        $members = Member::query()
+            ->with('group')
+            ->whereKey($memberIds)
+            ->where('status', MemberStatus::Aktif)
+            ->get();
+
+        $existing = DuesRecord::query()
+            ->forPeriod($year, $month)
+            ->whereIn('member_id', $members->modelKeys())
+            ->get()
+            ->keyBy('member_id');
+
+        return $members
+            ->map(function (Member $member) use ($existing, $year, $month): DuesRecord {
+                $record = $existing->get($member->getKey()) ?? new DuesRecord([
+                    'period_year' => $year,
+                    'period_month' => $month,
+                    'amount_due' => $member->monthly_dues_amount,
+                ]);
+
+                $record->setRelation('member', $member);
+
+                return $record;
+            })
+            // Urutan sama dengan cetak per kelompok agar hasilnya mudah dicocokkan.
+            ->sortBy(fn (DuesRecord $record) => [
+                $record->member->group?->name,
+                $record->member->no_urut ?? PHP_INT_MAX,
+                $record->member->member_number,
+            ])
+            ->values();
+    }
+
+    /**
      * Daftar anggota per kelompok — A4, satu kelompok per halaman. (§6.x)
      *
      * Kolom: nomor urut, nama hanzi, nama Indonesia, alamat, telepon,

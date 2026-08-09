@@ -41,6 +41,7 @@ Route::prefix('kolektor')->name('kolektor.')->group(function () {
  */
 Route::middleware(['auth', 'manager'])->group(function () {
     Route::get('cetak/kupon', [PdfController::class, 'coupons'])->name('dues.coupons');
+    Route::get('cetak/kupon-pilihan', [PdfController::class, 'selectedCoupons'])->name('dues.coupons.selected');
     Route::get('cetak/anggota', [PdfController::class, 'memberList'])->name('members.list');
     Route::get('cetak/kartu/{member}', [PdfController::class, 'memberCard'])->name('members.card');
 

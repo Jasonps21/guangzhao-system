@@ -28,6 +28,7 @@ class PrintRouteAccessTest extends TestCase
 
         return [
             route('dues.coupons', ['year' => now()->year, 'month' => now()->month]),
+            route('dues.coupons.selected', ['year' => now()->year, 'month' => now()->month, 'members' => [$member->id]]),
             route('members.list'),
             route('members.card', $member),
             route('condolence.receipt', $condolence),
