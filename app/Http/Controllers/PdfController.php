@@ -369,15 +369,27 @@ class PdfController extends Controller
     }
 
     /**
-     * PWA manifest untuk mode kolektor.
+     * PWA manifest untuk seluruh aplikasi.
+     *
+     * Tombol "Pasang" browser muncul di halaman /masuk, yang dipakai semua
+     * peran. Karena itu start_url harus menunjuk ke gerbang masuk — gerbanglah
+     * yang tahu peran penggunanya — bukan langsung ke mode kolektor. Sebelumnya
+     * start_url menunjuk ke /kolektor, sehingga pengurus yang memasang aplikasi
+     * selalu mendarat di halaman kolektor tiap kali membukanya kembali.
      */
     public function manifest(): JsonResponse
     {
         return response()->json([
-            'name' => config('app.name').' — Kolektor',
+            // Identitas dikunci ke start_url lama agar ponsel kolektor yang
+            // sudah memasang aplikasi memperlakukan manifest ini sebagai
+            // pembaruan, bukan sebagai aplikasi baru.
+            'id' => '/kolektor',
+            'name' => config('app.name'),
             'short_name' => 'Iuran',
-            'start_url' => route('kolektor.groups'),
-            'scope' => '/kolektor',
+            'start_url' => route('login'),
+            // Seluruh aplikasi, supaya panel admin tidak dianggap situs luar
+            // dan dibuka di tab browser terpisah.
+            'scope' => '/',
             'display' => 'standalone',
             'background_color' => '#f4f2ef',
             'theme_color' => '#f4f2ef',

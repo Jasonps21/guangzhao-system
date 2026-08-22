@@ -20,11 +20,19 @@ Route::livewire('masuk', LoginGate::class)->name('login');
 Route::redirect('admin/login', '/masuk');
 
 /*
+ * Manifest PWA untuk seluruh aplikasi, bukan hanya mode kolektor. (§D, §6.2)
+ *
+ * Tombol "Pasang" muncul di halaman /masuk yang dipakai semua peran, jadi
+ * aplikasi terpasangnya harus netral. URL lamanya tetap hidup sebagai
+ * pengalihan, sama seperti pintu login lama.
+ */
+Route::get('manifest.webmanifest', [PdfController::class, 'manifest'])->name('manifest');
+Route::redirect('kolektor/manifest.webmanifest', '/manifest.webmanifest');
+
+/*
  * Mode Kolektor (lapangan) — halaman PWA sederhana, terpisah dari panel admin. (§D, §6.2)
  */
 Route::prefix('kolektor')->name('kolektor.')->group(function () {
-    Route::get('manifest.webmanifest', [PdfController::class, 'manifest'])->name('manifest');
-
     Route::redirect('login', '/masuk')->name('login');
 
     Route::middleware('auth')->group(function () {

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f4f2ef">
-    <link rel="manifest" href="{{ route('kolektor.manifest') }}">
+    <link rel="manifest" href="{{ route('manifest') }}">
     <title>{{ $title ?? 'Penagihan Iuran' }} — {{ config('app.name') }}</title>
 
     <link rel="preload" as="font" type="font/woff2" href="{{ asset('fonts/kolektor/instrument-sans-600.woff2') }}" crossorigin>
