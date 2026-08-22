@@ -46,16 +46,19 @@ class DuesRecordsTable
                 TextColumn::make('paid_at')
                     ->label('Tgl Bayar')
                     ->date('d M Y')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visibleFrom('lg'),
                 TextColumn::make('recordedBy.name')
                     ->label('Dicatat oleh')
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
                 TextColumn::make('collection_method')
                     ->label('Metode')
                     ->badge()
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
             ])
             ->filters([
                 SelectFilter::make('status')

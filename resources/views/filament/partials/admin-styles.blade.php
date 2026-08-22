@@ -108,4 +108,57 @@
         border-color: rgb(63 63 70);
         color: rgb(228 228 231);
     }
+
+    /* ---- Perbaikan tabrakan stackedOnMobile x visibleFrom ----
+       Filament memaksa tiap sel header tampil kembali mulai 640px lewat
+       `.fi-ta-table-stacked-on-mobile > thead > tr > .fi-ta-header-cell`, dan
+       aturan itu lebih spesifik daripada `.fi-ta-header-cell.lg:fi-visible`
+       yang menyembunyikan kolom sekunder. Penjaga serupa sudah ditulis Filament
+       untuk `tbody`, tetapi tidak untuk `thead` — akibatnya di rentang
+       640-1024px header menampilkan 7 kolom sementara isinya hanya 5, sehingga
+       setiap kolom bergeser dan datanya terbaca di bawah judul yang salah.
+
+       Di bawah ini penjaga yang hilang itu dilengkapi, mengikuti bentuk aturan
+       `tbody` milik Filament sendiri. */
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > thead > tr > .fi-ta-header-cell.lg\:fi-visible {
+        display: none;
+    }
+
+    @media (min-width: 64rem) {
+        .fi-ta-table.fi-ta-table-stacked-on-mobile > thead > tr > .fi-ta-header-cell.lg\:fi-visible {
+            display: table-cell;
+        }
+    }
+
+    /* ---- Tabel bertumpuk di layar HP ----
+       stackedOnMobile() menaruh label kolom di atas nilainya, sehingga satu
+       baris memakan dua kali lipat tinggi dan hanya muat satu anggota per
+       layar. Di bawah 640px keduanya didudukkan berdampingan, jadi kartunya
+       separuh lebih pendek tanpa ada data yang disembunyikan.
+
+       Yang diatur hanya label dan isinya, bukan `display` selnya: sel itulah
+       yang dipakai Filament untuk menyembunyikan kolom sekunder lewat
+       `visibleFrom()`, dan menimpanya akan memunculkan kembali kolom yang
+       justru sedang disembunyikan. */
+    @media (max-width: 39.9375rem) {
+        .fi-ta-table-stacked-on-mobile .fi-ta-cell-label,
+        .fi-ta-table-stacked-on-mobile .fi-ta-cell-content {
+            display: inline-block;
+            vertical-align: top;
+        }
+
+        /* Padding atas & tinggi baris bawaan label dibuat sama dengan isinya,
+           supaya baris pertama keduanya sejajar. */
+        .fi-ta-table-stacked-on-mobile .fi-ta-cell-label {
+            width: 38%;
+            margin-block: 0;
+            padding-block: 0;
+            padding-inline-end: 0.75rem;
+            line-height: 1.25rem;
+        }
+
+        .fi-ta-table-stacked-on-mobile .fi-ta-cell-content {
+            width: 62%;
+        }
+    }
 </style>

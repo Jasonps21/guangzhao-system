@@ -45,12 +45,14 @@ class VisitsRelationManager extends RelationManager
                     ->label('Alamat saat itu')
                     ->limit(40)
                     ->tooltip(fn (MemberVisit $record): ?string => $record->address_snapshot)
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visibleFrom('lg'),
                 TextColumn::make('note')
                     ->label('Catatan / patokan')
                     ->limit(40)
                     ->tooltip(fn (MemberVisit $record): ?string => $record->note)
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visibleFrom('lg'),
             ])
             ->defaultSort('visited_at', 'desc')
             ->recordActions([

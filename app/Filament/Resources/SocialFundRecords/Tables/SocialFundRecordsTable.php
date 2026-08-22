@@ -38,7 +38,8 @@ class SocialFundRecordsTable
                 TextColumn::make('fund_form')
                     ->label('Bentuk')
                     ->badge()
-                    ->color('gray'),
+                    ->color('gray')
+                    ->visibleFrom('lg'),
                 TextColumn::make('amount')
                     ->label('Jumlah')
                     // Barang tanpa taksiran nilai tampil sebagai deskripsi barangnya.
@@ -52,7 +53,8 @@ class SocialFundRecordsTable
                     ->label('Keperluan')
                     ->placeholder('—')
                     ->wrap()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
             ])
             ->filters([
                 SelectFilter::make('direction')

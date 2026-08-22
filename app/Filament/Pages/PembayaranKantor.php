@@ -244,7 +244,8 @@ class PembayaranKantor extends Page implements HasTable
                     ->state(fn (DuesReceipt $record): string => $record->periodRangeLabel()),
                 TextColumn::make('months_count')
                     ->label('Jml Bulan')
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->visibleFrom('lg'),
                 TextColumn::make('total_amount')
                     ->label('Total')
                     ->money('IDR')
@@ -253,7 +254,8 @@ class PembayaranKantor extends Page implements HasTable
                     ->label('Yang Menerima')
                     ->state(fn (DuesReceipt $record): ?string => $record->receiverName())
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
             ])
             ->filters([
                 SelectFilter::make('period_year')

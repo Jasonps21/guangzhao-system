@@ -51,10 +51,12 @@ class DuesRecordsRelationManager extends RelationManager
                 TextColumn::make('paid_at')
                     ->label('Tgl Bayar')
                     ->date('d M Y')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visibleFrom('lg'),
                 TextColumn::make('recordedBy.name')
                     ->label('Dicatat oleh')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->visibleFrom('lg'),
             ])
             ->defaultSort('period_year', 'desc')
             ->filters([

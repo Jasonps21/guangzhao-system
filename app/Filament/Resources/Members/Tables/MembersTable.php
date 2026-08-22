@@ -36,7 +36,8 @@ class MembersTable
                     ->label('中文名 (Mandarin)')
                     ->description(fn ($record): ?string => $record->name_pinyin)
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
                 TextColumn::make('group.name')
                     ->label('Kelompok')
                     ->searchable()
@@ -55,7 +56,8 @@ class MembersTable
                     ->boolean()
                     ->tooltip(fn (Member $record): string => $record->hasCompleteLocation()
                         ? 'Titik & foto rumah lengkap'
-                        : 'Titik/foto rumah belum lengkap'),
+                        : 'Titik/foto rumah belum lengkap')
+                    ->visibleFrom('lg'),
                 TextColumn::make('phone')
                     ->label('Telepon')
                     ->toggleable(isToggledHiddenByDefault: true),

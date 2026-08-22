@@ -37,7 +37,8 @@ class CondolencePaymentsTable
                 TextColumn::make('escort_name')
                     ->label('Pengantar')
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
                 TextColumn::make('recordedBy.name')
                     ->label('Dicatat oleh')
                     ->placeholder('—')

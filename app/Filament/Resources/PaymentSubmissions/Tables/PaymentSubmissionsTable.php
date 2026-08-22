@@ -21,7 +21,8 @@ class PaymentSubmissionsTable
                 TextColumn::make('created_at')
                     ->label('Diajukan')
                     ->dateTime('d M Y H:i')
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
                 TextColumn::make('member.name_indonesian')
                     ->label('Anggota')
                     ->description(fn (PaymentSubmission $record): ?string => $record->member?->member_number)
@@ -35,7 +36,8 @@ class PaymentSubmissionsTable
                 TextColumn::make('months')
                     ->label('Jml Bulan')
                     ->state(fn (PaymentSubmission $record): int => $record->monthsCount())
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->visibleFrom('lg'),
                 TextColumn::make('total_amount')
                     ->label('Total Setoran')
                     ->money('IDR'),
@@ -45,7 +47,8 @@ class PaymentSubmissionsTable
                 TextColumn::make('reviewedBy.name')
                     ->label('Diverifikasi oleh')
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visibleFrom('lg'),
             ])
             ->filters([
                 SelectFilter::make('status')
