@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Exports\MonthlyDuesExport;
+use App\Support\ActivityRecorder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
@@ -30,6 +31,13 @@ class ExportMonthlyDues extends Command
         $path = 'exports/'.$filename;
 
         Excel::store(new MonthlyDuesExport($year, $month), $path, 'local');
+
+        // Dijalankan penjadwal, jadi umumnya tanpa pengguna — yang penting
+        // tercatat adalah rekap periode mana yang keluar dari sistem, dan kapan.
+        app(ActivityRecorder::class)->exported('Ekspor rekap iuran bulanan', [
+            'periode' => Carbon::create($year, $month, 1)->translatedFormat('F Y'),
+            'berkas' => $filename,
+        ]);
 
         $email = config('mail.foundation_address');
 

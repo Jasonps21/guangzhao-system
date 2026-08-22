@@ -2,7 +2,12 @@
 
 namespace App\Providers;
 
+use App\Support\ActivityRecorder;
 use Filament\Tables\Table;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -31,5 +36,37 @@ class AppServiceProvider extends ServiceProvider
          * yang dibuat kemudian — tanpa perlu diingat lagi.
          */
         Table::configureUsing(fn (Table $table): Table => $table->stackedOnMobile());
+
+        $this->recordAuthenticationActivity();
+    }
+
+    /**
+     * Masuk, keluar, dan percobaan masuk yang gagal tidak meninggalkan jejak di
+     * tabel mana pun, jadi ketiganya diambil dari event bawaan Laravel.
+     *
+     * Didaftarkan di sini, bukan sebagai kelas di app/Listeners, supaya tidak
+     * menambah folder dasar baru pada struktur aplikasi.
+     */
+    private function recordAuthenticationActivity(): void
+    {
+        Event::listen(Login::class, function (Login $event): void {
+            app(ActivityRecorder::class)->signedIn($event->user);
+        });
+
+        Event::listen(Logout::class, function (Logout $event): void {
+            app(ActivityRecorder::class)->signedOut($event->user);
+        });
+
+        Event::listen(Failed::class, function (Failed $event): void {
+            // Kredensial memuat kata sandi yang diketik; hanya pengenalnya yang
+            // boleh ikut tercatat.
+            $identifier = $event->credentials['username']
+                ?? $event->credentials['email']
+                ?? null;
+
+            app(ActivityRecorder::class)->signInFailed(
+                is_string($identifier) ? $identifier : null,
+            );
+        });
     }
 }

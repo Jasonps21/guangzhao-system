@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\RelationshipType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * Satu arah hubungan kekeluargaan antar-anggota (member -> related_member).
@@ -13,6 +15,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class MemberRelationship extends Model
 {
+    use LogsActivity;
+
     protected $fillable = [
         'member_id',
         'related_member_id',
@@ -41,12 +45,14 @@ class MemberRelationship extends Model
             static::$syncingReciprocal = true;
 
             try {
-                static::query()->firstOrCreate([
+                // Sisi kebalikan dibuat sistem, bukan pengguna. Tanpa ini satu
+                // tindakan tampak dua kali di log audit.
+                activity()->withoutLogs(fn () => static::query()->firstOrCreate([
                     'member_id' => $relationship->related_member_id,
                     'related_member_id' => $relationship->member_id,
                 ], [
                     'relationship_type' => $relationship->relationship_type->inverse(),
-                ]);
+                ]));
             } finally {
                 static::$syncingReciprocal = false;
             }
@@ -109,5 +115,13 @@ class MemberRelationship extends Model
     public function label(): string
     {
         return $this->relationship_type->genderedLabel($this->relatedMember?->gender);
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['member_id', 'related_member_id', 'relationship_type'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 }

@@ -283,14 +283,40 @@ class PaymentService
         return DB::transaction(function () use ($submission, $by): bool {
             $paidAt = CarbonImmutable::now();
 
-            foreach ($submission->duesRecords as $record) {
-                $record->confirmPaid($paidAt);
-            }
+            /*
+             * Satu setoran bisa melunasi 6-12 bulan sekaligus. Tiap bulannya
+             * tidak dicatat sendiri-sendiri; satu ringkasan di bawah mewakili
+             * seluruh tindakan, lengkap dengan siapa yang menyetujuinya.
+             */
+            activity()->withoutLogs(function () use ($submission, $by, $paidAt): void {
+                foreach ($submission->duesRecords as $record) {
+                    $record->confirmPaid($paidAt);
+                }
 
-            $submission->approve($by);
+                $submission->approve($by);
+            });
+
+            $this->recordSubmissionReview($submission, $by, 'Setoran kolektor disetujui');
 
             return true;
         });
+    }
+
+    /**
+     * Ringkasan satu keputusan atas setoran kolektor, dipakai baik saat
+     * disetujui maupun ditolak.
+     */
+    private function recordSubmissionReview(PaymentSubmission $submission, User $by, string $description): void
+    {
+        app(ActivityRecorder::class)->bulk($description, [
+            'anggota' => $submission->member?->displayName(),
+            'no_anggota' => $submission->member?->member_number,
+            'kolektor' => $submission->collector?->name,
+            'periode' => $submission->periodRangeLabel(),
+            'jumlah_bulan' => $submission->monthsCount(),
+            'total_setoran' => (float) $submission->total_amount,
+            'diputuskan_oleh' => $by->name,
+        ], $submission);
     }
 
     /**
@@ -303,11 +329,16 @@ class PaymentService
         }
 
         return DB::transaction(function () use ($submission, $by, $notes): bool {
-            foreach ($submission->duesRecords as $record) {
-                $record->releaseToUnpaid();
-            }
+            // Alasannya sama dengan approveSubmission: satu keputusan, satu baris log.
+            activity()->withoutLogs(function () use ($submission, $by, $notes): void {
+                foreach ($submission->duesRecords as $record) {
+                    $record->releaseToUnpaid();
+                }
 
-            $submission->reject($by, $notes);
+                $submission->reject($by, $notes);
+            });
+
+            $this->recordSubmissionReview($submission, $by, 'Setoran kolektor ditolak');
 
             return true;
         });

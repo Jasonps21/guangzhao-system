@@ -8,11 +8,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class MemberGroup extends Model
 {
     /** @use HasFactory<MemberGroupFactory> */
-    use HasFactory;
+    use HasFactory, LogsActivity;
 
     protected $fillable = [
         'name',
@@ -44,5 +46,13 @@ class MemberGroup extends Model
     {
         return $this->belongsToMany(User::class, 'collector_group', 'group_id', 'collector_id')
             ->withTimestamps();
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['name', 'basis', 'description'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 }

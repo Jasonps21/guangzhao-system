@@ -161,4 +161,98 @@
             width: 62%;
         }
     }
+
+    /* ---- Jendela detail Log Aktivitas ----
+       Ditulis sebagai CSS biasa, bukan kelas utilitas Tailwind: panel ini tidak
+       punya build tema sendiri, jadi utilitas yang tidak dipakai Filament tidak
+       ikut terkompilasi dan tidak akan berpengaruh. */
+    .gz-log {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        font-size: 0.875rem;
+    }
+
+    .gz-log-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.625rem 1.5rem;
+        margin: 0;
+    }
+
+    @media (min-width: 40rem) {
+        .gz-log-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    .gz-log-item dt {
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: rgb(113 113 122);
+    }
+
+    .gz-log-item dd {
+        margin: 0.125rem 0 0;
+        color: rgb(24 24 27);
+        overflow-wrap: anywhere;
+    }
+
+    .gz-log-section h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: rgb(63 63 70);
+    }
+
+    .gz-log-scroll {
+        overflow-x: auto;
+    }
+
+    .gz-log-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: start;
+    }
+
+    .gz-log-table th {
+        padding: 0 0.75rem 0.375rem 0;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-align: start;
+        white-space: nowrap;
+        color: rgb(113 113 122);
+    }
+
+    .gz-log-table td {
+        padding: 0.375rem 0.75rem 0.375rem 0;
+        border-top: 1px solid rgb(228 228 231);
+        vertical-align: top;
+        overflow-wrap: anywhere;
+    }
+
+    .gz-log-was {
+        color: rgb(113 113 122);
+        text-decoration: line-through;
+    }
+
+    .dark .gz-log-item dd {
+        color: rgb(228 228 231);
+    }
+
+    .dark .gz-log-section h3 {
+        color: rgb(212 212 216);
+    }
+
+    .dark .gz-log-item dt,
+    .dark .gz-log-table th,
+    .dark .gz-log-was {
+        color: rgb(161 161 170);
+    }
+
+    .dark .gz-log-table td {
+        border-top-color: rgb(63 63 70);
+    }
 </style>

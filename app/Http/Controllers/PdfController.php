@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\MemberStatus;
+use App\Enums\PrintedDocument;
 use App\Models\CondolencePayment;
 use App\Models\DuesReceipt;
 use App\Models\DuesRecord;
@@ -10,6 +11,7 @@ use App\Models\Member;
 use App\Models\MemberGroup;
 use App\Models\OrganizationSetting;
 use App\Models\SocialFundRecord;
+use App\Support\ActivityRecorder;
 // Facade dan kelas konkretnya hanya beda huruf besar-kecil (Pdf vs PDF), dan PHP
 // tidak membedakannya — kelas konkretnya dialiaskan agar keduanya tidak tertukar.
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -24,6 +26,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PdfController extends Controller
 {
+    public function __construct(private readonly ActivityRecorder $activity) {}
+
     /**
      * Kupon iuran — F4 (215 × 330 mm), 10 kupon/lembar (2 × 5). (§F, §6.7)
      *
@@ -69,6 +73,12 @@ class PdfController extends Controller
             300,
             fn (): string => Cache::remember($key, now()->addHours(6), $build),
         );
+
+        $this->activity->printed(PrintedDocument::KuponIuran, [
+            'periode' => Carbon::create($year, $month, 1)->translatedFormat('F Y'),
+            'kelompok' => $groupId ? MemberGroup::find($groupId)?->name : 'Semua kelompok',
+            'jumlah_kupon' => $records->count(),
+        ]);
 
         return response(base64_decode($encoded, strict: true), 200, [
             'Content-Type' => 'application/pdf',
@@ -120,15 +130,22 @@ class PdfController extends Controller
         $memberIds = array_map('intval', (array) $request->input('members', []));
 
         $organization = OrganizationSetting::current();
+        $records = $this->recordsForMembers($year, $month, $memberIds);
 
         $pdf = $this->render('pdf.coupons', [
-            'records' => $this->recordsForMembers($year, $month, $memberIds),
+            'records' => $records,
             'period' => Carbon::create($year, $month, 1)->translatedFormat('F Y'),
             'organization' => $organization,
             // Watermark diulang di tiap kupon — pakai path, bukan data URI. (§logoPath)
             'logo' => $this->logoPath($organization),
             'splitPerGroup' => false,
         ])->setPaper([0, 0, 609.45, 935.43]); // F4 215×330mm in points
+
+        $this->activity->printed(PrintedDocument::KuponTerpilih, [
+            'periode' => Carbon::create($year, $month, 1)->translatedFormat('F Y'),
+            'jumlah_kupon' => $records->count(),
+            'anggota' => $records->map(fn (DuesRecord $r): ?string => $r->member?->displayName())->filter()->values()->all(),
+        ]);
 
         return $pdf->stream('kupon-pilihan-'.$year.'-'.$month.'.pdf');
     }
@@ -224,6 +241,12 @@ class PdfController extends Controller
             'printedAt' => now()->translatedFormat('d F Y H:i'),
         ])->setPaper('a4', 'landscape');
 
+        $this->activity->printed(PrintedDocument::DaftarAnggota, [
+            'kelompok' => $groupId ? MemberGroup::find($groupId)?->name : 'Semua kelompok',
+            'hanya_anggota_aktif' => $activeOnly ? 'Ya' : 'Tidak',
+            'jumlah_anggota' => $groups->sum(fn (MemberGroup $group): int => $group->members->count()),
+        ]);
+
         return $pdf->stream('daftar-anggota.pdf');
     }
 
@@ -240,6 +263,11 @@ class PdfController extends Controller
             'logo' => $this->logoDataUri($organization),
         ])->setPaper([0, 0, 243.78, 153.07]); // 86×54mm in points
 
+        $this->activity->printed(PrintedDocument::KartuAnggota, [
+            'no_anggota' => $member->member_number,
+            'nama' => $member->displayName(),
+        ], $member);
+
         return $pdf->stream("kartu-{$member->member_number}.pdf");
     }
 
@@ -248,6 +276,8 @@ class PdfController extends Controller
      */
     public function condolenceReceipt(CondolencePayment $payment): Response
     {
+        $this->activity->printed(PrintedDocument::TandaTerimaUangDuka, $this->condolenceDetails($payment), $payment);
+
         return $this->condolenceNote($payment, 'terima');
     }
 
@@ -256,6 +286,8 @@ class PdfController extends Controller
      */
     public function condolenceHandover(CondolencePayment $payment): Response
     {
+        $this->activity->printed(PrintedDocument::TandaPemberianUangDuka, $this->condolenceDetails($payment), $payment);
+
         return $this->condolenceNote($payment, 'pemberian');
     }
 
@@ -271,6 +303,12 @@ class PdfController extends Controller
             'organization' => $organization,
             'logo' => $this->logoDataUri($organization),
         ])->setPaper('a5', 'landscape');
+
+        $this->activity->printed(PrintedDocument::NotaDanaSosial, [
+            'no_nota' => $record->receipt_number,
+            'pihak' => $record->party_name,
+            'jumlah' => $record->amount !== null ? (float) $record->amount : null,
+        ], $record);
 
         return $pdf->stream('tanda-terima-'.$record->receipt_number.'.pdf');
     }
@@ -288,7 +326,28 @@ class PdfController extends Controller
             'logo' => $this->logoDataUri($organization),
         ])->setPaper('a5', 'landscape');
 
+        $this->activity->printed(PrintedDocument::NotaPembayaranIuran, [
+            'no_nota' => $receipt->receipt_number,
+            'anggota' => $receipt->member?->displayName(),
+            'periode' => $receipt->periodRangeLabel(),
+            'jumlah' => (float) $receipt->total_amount,
+        ], $receipt);
+
         return $pdf->stream('tanda-terima-iuran-'.$receipt->receipt_number.'.pdf');
+    }
+
+    /**
+     * Detail yang sama dipakai kedua nota uang duka.
+     *
+     * @return array<string, mixed>
+     */
+    private function condolenceDetails(CondolencePayment $payment): array
+    {
+        return [
+            'no_nota' => $payment->receipt_number,
+            'penerima' => $payment->recipient_name,
+            'jumlah' => (float) $payment->amount,
+        ];
     }
 
     /**

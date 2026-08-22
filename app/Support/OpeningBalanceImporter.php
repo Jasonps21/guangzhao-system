@@ -121,40 +121,61 @@ class OpeningBalanceImporter
     {
         $result = new OpeningBalanceResult;
 
-        DB::transaction(function () use ($rows, $year, $dryRun, $buildMonthMap, $describeFailure, $result): void {
-            foreach ($rows as $row) {
-                $memberNumber = trim((string) ($row['member_number'] ?? ''));
+        /*
+         * Impor saldo awal menyentuh ratusan tagihan sekaligus. Barisnya tidak
+         * dicatat satu per satu; yang tercatat adalah satu ringkasan di bawah.
+         */
+        activity()->withoutLogs(function () use ($rows, $year, $dryRun, $buildMonthMap, $describeFailure, $result): void {
+            DB::transaction(function () use ($rows, $year, $dryRun, $buildMonthMap, $describeFailure, $result): void {
+                foreach ($rows as $row) {
+                    $memberNumber = trim((string) ($row['member_number'] ?? ''));
 
-                if ($memberNumber === '') {
-                    continue;
+                    if ($memberNumber === '') {
+                        continue;
+                    }
+
+                    $member = Member::query()
+                        ->where('member_number', $memberNumber)
+                        ->where('status', MemberStatus::Aktif)
+                        ->first();
+
+                    if ($member === null) {
+                        $result->addIssue((string) ($row['sheet'] ?? '-'), $row['row'], $memberNumber, 'Nomor anggota tidak ditemukan / tidak aktif');
+
+                        continue;
+                    }
+
+                    $monthMap = $buildMonthMap($row, $member);
+
+                    if ($monthMap === false) {
+                        $result->addIssue((string) ($row['sheet'] ?? '-'), $row['row'], $memberNumber, $describeFailure($row));
+
+                        continue;
+                    }
+
+                    $this->applyMonthMap($member, $year, $monthMap, $result);
                 }
 
-                $member = Member::query()
-                    ->where('member_number', $memberNumber)
-                    ->where('status', MemberStatus::Aktif)
-                    ->first();
-
-                if ($member === null) {
-                    $result->addIssue((string) ($row['sheet'] ?? '-'), $row['row'], $memberNumber, 'Nomor anggota tidak ditemukan / tidak aktif');
-
-                    continue;
+                if ($dryRun) {
+                    DB::rollBack();
                 }
-
-                $monthMap = $buildMonthMap($row, $member);
-
-                if ($monthMap === false) {
-                    $result->addIssue((string) ($row['sheet'] ?? '-'), $row['row'], $memberNumber, $describeFailure($row));
-
-                    continue;
-                }
-
-                $this->applyMonthMap($member, $year, $monthMap, $result);
-            }
-
-            if ($dryRun) {
-                DB::rollBack();
-            }
+            });
         });
+
+        /*
+         * Uji-coba tidak menulis apa pun ke database, jadi tidak ada yang perlu
+         * dipertanggungjawabkan di jejak audit.
+         */
+        if (! $dryRun) {
+            app(ActivityRecorder::class)->imported('Impor saldo awal iuran', [
+                'tahun' => $year,
+                'anggota_diproses' => $result->membersProcessed,
+                'tagihan_lunas' => $result->paidCreated,
+                'tagihan_tunggakan' => $result->arrearsCreated,
+                'total_tunggakan' => $result->arrearsTotal,
+                'baris_bermasalah' => count($result->issues),
+            ]);
+        }
 
         return $result;
     }

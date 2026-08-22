@@ -7,6 +7,8 @@ use Database\Factories\MemberVisitFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * Satu kunjungan lapangan ke rumah anggota. Riwayat permanen supaya penerus
@@ -15,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MemberVisit extends Model
 {
     /** @use HasFactory<MemberVisitFactory> */
-    use HasFactory;
+    use HasFactory, LogsActivity;
 
     protected $fillable = [
         'member_id',
@@ -55,5 +57,13 @@ class MemberVisit extends Model
     public function collector(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['member_id', 'user_id', 'visited_at', 'outcome', 'address_snapshot', 'note'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 }
