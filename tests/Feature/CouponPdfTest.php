@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\DuesStatus;
 use App\Enums\MemberStatus;
 use App\Filament\Resources\DuesRecords\Pages\ListDuesRecords;
 use App\Models\DuesRecord;
@@ -549,6 +550,58 @@ class CouponPdfTest extends TestCase
 
         $response->assertOk();
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    /**
+     * Kupon adalah tagihan, bukan arsip. Anggota yang sudah melunasi bulan itu
+     * — misalnya membayar Januari–Desember sekaligus di kantor — tidak boleh
+     * ikut tercetak lagi, karena kolektor akan menagihnya untuk kedua kalinya.
+     * Setoran kolektor yang masih menunggu persetujuan juga tidak: uangnya sudah
+     * berpindah tangan di lapangan. Bila setorannya ditolak, tagihannya kembali
+     * BELUM BAYAR dan ikut tercetak lagi dengan sendirinya.
+     */
+    public function test_paid_and_pending_months_are_excluded_from_coupons(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $group = MemberGroup::factory()->create(['name' => 'Kelompok 1']);
+
+        $belumBayar = Member::factory()->active()->create([
+            'group_id' => $group->id,
+            'name_indonesian' => 'Belum Bayar',
+        ]);
+        $lunas = Member::factory()->active()->create([
+            'group_id' => $group->id,
+            'name_indonesian' => 'Sudah Lunas',
+        ]);
+        $menunggu = Member::factory()->active()->create([
+            'group_id' => $group->id,
+            'name_indonesian' => 'Menunggu Persetujuan',
+        ]);
+
+        DuesRecord::factory()->forPeriod(2025, 12)->create(['member_id' => $belumBayar->id]);
+        DuesRecord::factory()->forPeriod(2025, 12)->paid()->create(['member_id' => $lunas->id]);
+        DuesRecord::factory()->forPeriod(2025, 12)->create([
+            'member_id' => $menunggu->id,
+            'status' => DuesStatus::MenungguPersetujuan,
+        ]);
+
+        $rendered = [];
+        view()->composer('pdf.coupons', function ($view) use (&$rendered): void {
+            $rendered[] = $view->getData();
+        });
+
+        $this->actingAs($admin)->get(route('dues.coupons', [
+            'year' => 2025,
+            'month' => 12,
+            'group' => $group->id,
+        ]))->assertOk();
+
+        $this->assertNotEmpty($rendered);
+
+        $this->assertSame(
+            ['Belum Bayar'],
+            $rendered[0]['records']->map(fn (DuesRecord $record): string => $record->member->name_indonesian)->all(),
+        );
     }
 
     public function test_inactive_members_are_excluded_from_coupons(): void

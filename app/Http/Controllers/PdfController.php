@@ -89,6 +89,14 @@ class PdfController extends Controller
     /**
      * Tagihan yang layak dicetak jadi kupon, sudah terurut siap dibagikan.
      *
+     * Hanya tagihan BELUM BAYAR. Kupon adalah surat tagihan yang dibawa
+     * kolektor, bukan arsip: anggota yang sudah melunasi bulan itu — misalnya
+     * membayar Januari–Desember sekaligus di kantor — akan ditagih untuk kedua
+     * kalinya bila kuponnya tetap ikut tercetak. Setoran kolektor yang masih
+     * menunggu persetujuan juga dilewati karena uangnya sudah berpindah tangan
+     * di lapangan; bila setorannya ditolak, tagihannya kembali BELUM BAYAR dan
+     * ikut tercetak lagi dengan sendirinya.
+     *
      * @return Collection<int, DuesRecord>
      */
     private function couponRecords(int $year, int $month, ?int $groupId): Collection
@@ -96,6 +104,7 @@ class PdfController extends Controller
         return DuesRecord::query()
             ->with(['member.group'])
             ->forPeriod($year, $month)
+            ->unpaid()
             ->whereHas('member', function ($query) use ($groupId): void {
                 $query->where('status', MemberStatus::Aktif);
                 if ($groupId) {
