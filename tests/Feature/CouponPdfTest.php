@@ -604,6 +604,39 @@ class CouponPdfTest extends TestCase
         );
     }
 
+    /**
+     * Konsekuensi langsung dari penyaringan di atas: satu kelompok yang seluruh
+     * anggotanya sudah melunasi bulan itu kini menghasilkan NOL kupon — keadaan
+     * yang dulu praktis mustahil. Lembarnya harus tetap terbit dengan
+     * keterangan, bukan meledak karena tak ada satu pun kupon untuk ditata.
+     */
+    public function test_a_fully_paid_group_prints_a_page_saying_there_is_nothing_to_bill(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $group = MemberGroup::factory()->create(['name' => 'Kelompok 1']);
+
+        foreach (range(1, 3) as $ignored) {
+            $member = Member::factory()->active()->create(['group_id' => $group->id]);
+            DuesRecord::factory()->forPeriod(2025, 12)->paid()->create(['member_id' => $member->id]);
+        }
+
+        $rendered = [];
+        view()->composer('pdf.coupons', function ($view) use (&$rendered): void {
+            $rendered[] = $view->getData();
+        });
+
+        $response = $this->actingAs($admin)->get(route('dues.coupons', [
+            'year' => 2025,
+            'month' => 12,
+            'group' => $group->id,
+        ]));
+
+        $response->assertOk();
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+        $this->assertNotEmpty($rendered);
+        $this->assertCount(0, $rendered[0]['records']);
+    }
+
     public function test_inactive_members_are_excluded_from_coupons(): void
     {
         $admin = User::factory()->admin()->create();
