@@ -77,7 +77,59 @@ class Member extends Model
             if ($member->isDirty('status')) {
                 $member->status_changed_at = now();
             }
+
+            // Nomor anggota selalu mengikuti kelompok dan no. urut. Disimpan
+            // terpisah, keduanya pernah bercerai: kupon mencetak "57" sementara
+            // kodenya masih "7-056-2".
+            if ($member->group_id !== null && $member->no_urut !== null) {
+                $group = $member->relationLoaded('group') && $member->group?->getKey() === $member->group_id
+                    ? $member->group
+                    : MemberGroup::query()->find($member->group_id);
+
+                if ($group !== null) {
+                    $number = self::numberFor($group, (int) $member->no_urut);
+
+                    $member->member_number = $member->status === null || $member->status->isActive()
+                        ? $number
+                        : $member->archivedNumber($number);
+                }
+            }
         });
+    }
+
+    /**
+     * Nomor anggota untuk no. urut tertentu di sebuah kelompok, mis. "7-057".
+     */
+    public static function numberFor(MemberGroup $group, int $noUrut): string
+    {
+        return $group->memberNumberPrefix().'-'.str_pad((string) $noUrut, 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Kode arsip untuk anggota yang keluar, meninggal, atau pindah: "7-014-K".
+     *
+     * No. urut diperlakukan sebagai kursi — pengurus mengisinya lagi dengan
+     * orang baru — jadi kode aslinya dilepas. Kursi yang kosong dua kali
+     * mendapat "-K2", "-K3", dan seterusnya.
+     */
+    private function archivedNumber(string $number): string
+    {
+        if (preg_match('/^'.preg_quote($number, '/').'-K\d*$/', (string) $this->member_number) === 1) {
+            return $this->member_number;
+        }
+
+        $taken = self::withTrashed()
+            ->where('member_number', 'like', $number.'-K%')
+            ->when($this->exists, fn (Builder $query) => $query->whereKeyNot($this->getKey()))
+            ->pluck('member_number');
+
+        $candidate = $number.'-K';
+
+        for ($suffix = 2; $taken->contains($candidate); $suffix++) {
+            $candidate = $number.'-K'.$suffix;
+        }
+
+        return $candidate;
     }
 
     public function getActivitylogOptions(): LogOptions

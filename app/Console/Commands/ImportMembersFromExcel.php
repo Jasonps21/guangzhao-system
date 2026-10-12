@@ -9,6 +9,7 @@ use App\Models\MemberGroup;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class ImportMembersFromExcel extends Command
@@ -57,6 +58,20 @@ class ImportMembersFromExcel extends Command
         $reader->setReadDataOnly(true);
         $spreadsheet = $reader->load($file);
 
+        // Diperiksa sebelum --fresh menghapus apa pun: file yang ditolak
+        // tidak boleh sempat mengosongkan data lama.
+        $duplicates = $this->duplicateNumbers($spreadsheet);
+
+        if ($duplicates !== []) {
+            $this->error('Impor dibatalkan: ada nomor urut kembar. Betulkan dulu di Excel, tidak ada data yang diubah.');
+
+            foreach ($duplicates as $duplicate) {
+                $this->line("  Sheet {$duplicate['sheet']}: No {$duplicate['number']} dipakai di baris ".implode(', ', $duplicate['rows']));
+            }
+
+            return self::FAILURE;
+        }
+
         if ($this->option('fresh')) {
             $this->wipeExistingData();
         }
@@ -64,9 +79,8 @@ class ImportMembersFromExcel extends Command
         $groups = $this->ensureGroups();
 
         $totalImported = 0;
-        $collisions = 0;
 
-        DB::transaction(function () use ($spreadsheet, $groups, &$totalImported, &$collisions): void {
+        DB::transaction(function () use ($spreadsheet, $groups, &$totalImported): void {
             foreach (self::GROUP_SHEETS as $sheetName => $groupNumber) {
                 $sheet = $spreadsheet->getSheetByName($sheetName);
 
@@ -76,17 +90,13 @@ class ImportMembersFromExcel extends Command
                     continue;
                 }
 
-                $imported = $this->importSheet($sheet, $groupNumber, $groups[$groupNumber], $collisions);
+                $imported = $this->importSheet($sheet, $groupNumber, $groups[$groupNumber]);
                 $totalImported += $imported;
                 $this->line("  {$sheetName} → Kelompok {$groupNumber}: {$imported} anggota");
             }
         });
 
         $this->info("Selesai. Total {$totalImported} anggota diimpor ke ".count($groups).' kelompok.');
-
-        if ($collisions > 0) {
-            $this->warn("{$collisions} nomor anggota bentrok dan diberi akhiran unik.");
-        }
 
         return self::SUCCESS;
     }
@@ -127,18 +137,52 @@ class ImportMembersFromExcel extends Command
     }
 
     /**
-     * @param  array<int, string>  $usedNumbers  akumulasi member_number yang sudah dipakai (byref via closure tidak, jadi lokal)
+     * Nomor urut yang muncul lebih dari sekali dalam satu sheet.
+     *
+     * Dulu kembaran diberi akhiran "-2" lalu tetap diimpor, sehingga dua orang
+     * tercetak dengan nomor yang sama di kupon. Sekarang file seperti itu ditolak.
+     *
+     * @return list<array{sheet: string, number: int, rows: list<int>}>
      */
-    private function importSheet(Worksheet $sheet, int $groupNumber, MemberGroup $group, int &$collisions): int
+    private function duplicateNumbers(Spreadsheet $spreadsheet): array
     {
-        $rows = $sheet->toArray(null, true, false, false);
+        $duplicates = [];
+
+        foreach (self::GROUP_SHEETS as $sheetName => $groupNumber) {
+            $sheet = $spreadsheet->getSheetByName($sheetName);
+
+            if (! $sheet instanceof Worksheet) {
+                continue;
+            }
+
+            $rowsByNumber = [];
+
+            foreach ($this->memberRows($sheet, $groupNumber) as $memberRow) {
+                $rowsByNumber[$memberRow['no_urut']][] = $memberRow['line'];
+            }
+
+            foreach ($rowsByNumber as $number => $lines) {
+                if (count($lines) > 1) {
+                    $duplicates[] = ['sheet' => $sheetName, 'number' => $number, 'rows' => $lines];
+                }
+            }
+        }
+
+        return $duplicates;
+    }
+
+    /**
+     * Baris anggota dalam sebuah sheet beserta no. urut dan nomor barisnya di Excel.
+     *
+     * @return list<array{line: int, no_urut: int, row: array<int, mixed>, hanzi: ?string, indonesian: ?string}>
+     */
+    private function memberRows(Worksheet $sheet, int $groupNumber): array
+    {
         $isBebasIuran = $groupNumber === 10;
-
-        $imported = 0;
+        $memberRows = [];
         $sequence = 0;
-        $usedNumbers = [];
 
-        foreach ($rows as $row) {
+        foreach ($sheet->toArray(null, true, false, false) as $index => $row) {
             $hanzi = $this->cleanString($row[2] ?? null);
             $indonesian = $this->cleanString($row[3] ?? null);
 
@@ -152,9 +196,30 @@ class ImportMembersFromExcel extends Command
             // Sheet bebas iuran memakai penomoran "No" yang berulang per sub-blok,
             // jadi pakai urutan berjalan agar nomor anggota tetap bersih & unik.
             $rawNo = $row[1] ?? null;
-            $numberPart = ($isBebasIuran || ! is_numeric($rawNo)) ? $sequence : (int) $rawNo;
 
-            $memberNumber = $this->uniqueMemberNumber($groupNumber, $numberPart, $usedNumbers, $collisions);
+            $memberRows[] = [
+                'line' => $index + 1,
+                'no_urut' => ($isBebasIuran || ! is_numeric($rawNo)) ? $sequence : (int) $rawNo,
+                'row' => $row,
+                'hanzi' => $hanzi,
+                'indonesian' => $indonesian,
+            ];
+        }
+
+        return $memberRows;
+    }
+
+    /**
+     * Nomor anggota tidak diisi di sini: model membentuknya dari kelompok dan
+     * no. urut, sama seperti saat anggota disimpan dari panel.
+     */
+    private function importSheet(Worksheet $sheet, int $groupNumber, MemberGroup $group): int
+    {
+        $isBebasIuran = $groupNumber === 10;
+        $imported = 0;
+
+        foreach ($this->memberRows($sheet, $groupNumber) as $memberRow) {
+            $row = $memberRow['row'];
 
             [$address, $phone] = $this->splitAddressAndPhone($this->cleanString($row[4] ?? null));
 
@@ -169,14 +234,13 @@ class ImportMembersFromExcel extends Command
                 : $this->cleanString($row[6] ?? null);
 
             Member::create([
-                'member_number' => $memberNumber,
-                'name_hanzi' => $hanzi,
-                'name_indonesian' => $indonesian,
+                'name_hanzi' => $memberRow['hanzi'],
+                'name_indonesian' => $memberRow['indonesian'],
                 'address' => $address,
                 'phone' => $phone,
                 'monthly_dues_amount' => $duesAmount,
                 'group_id' => $group->id,
-                'no_urut' => $numberPart,
+                'no_urut' => $memberRow['no_urut'],
                 'status' => MemberStatus::Aktif,
                 'notes' => $notes,
             ]);
@@ -209,29 +273,6 @@ class ImportMembersFromExcel extends Command
         }
 
         return false;
-    }
-
-    /**
-     * @param  array<string, string>  $usedNumbers
-     */
-    private function uniqueMemberNumber(int $groupNumber, int $numberPart, array &$usedNumbers, int &$collisions): string
-    {
-        $base = $groupNumber.'-'.str_pad((string) $numberPart, 3, '0', STR_PAD_LEFT);
-        $candidate = $base;
-        $suffix = 1;
-
-        if (isset($usedNumbers[$candidate])) {
-            $collisions++;
-
-            while (isset($usedNumbers[$candidate])) {
-                $suffix++;
-                $candidate = $base.'-'.$suffix;
-            }
-        }
-
-        $usedNumbers[$candidate] = $candidate;
-
-        return $candidate;
     }
 
     /**

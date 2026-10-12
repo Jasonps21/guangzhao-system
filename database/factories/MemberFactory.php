@@ -35,7 +35,9 @@ class MemberFactory extends Factory
             'dues_category' => $category,
             'monthly_dues_amount' => $category->defaultAmount(),
             'group_id' => MemberGroup::factory(),
-            'no_urut' => fake()->optional()->numberBetween(1, 50),
+            // Kosong secara bawaan: no. urut menentukan nomor anggota, jadi angka
+            // acak di sini membuat dua anggota satu kelompok bisa bentrok.
+            'no_urut' => null,
             'status' => MemberStatus::Aktif,
             'joined_at' => fake()->optional()->dateTimeBetween('-5 years'),
             'notes' => null,

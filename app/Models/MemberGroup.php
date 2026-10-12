@@ -30,6 +30,20 @@ class MemberGroup extends Model
     }
 
     /**
+     * Awalan nomor anggota: angka pertama di nama kelompok ("Kelompok 10
+     * (Bebas Iuran)" → "10"). Kelompok yang namanya tanpa angka memakai id-nya,
+     * agar nomor anggotanya tetap terbentuk dan tidak bentrok dengan kelompok lain.
+     */
+    public function memberNumberPrefix(): string
+    {
+        if (preg_match('/\d+/', (string) $this->name, $match) === 1) {
+            return (string) (int) $match[0];
+        }
+
+        return (string) $this->getKey();
+    }
+
+    /**
      * @return HasMany<Member, $this>
      */
     public function members(): HasMany

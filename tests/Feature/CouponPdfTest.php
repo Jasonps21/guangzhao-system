@@ -180,6 +180,38 @@ class CouponPdfTest extends TestCase
     }
 
     /**
+     * Perbaikan data langsung di database tidak menyentuh updated_at. Sidik
+     * jari yang hanya membaca waktu ubah akan menyajikan kupon lama — nomor
+     * urut yang sudah dibetulkan tetap tercetak dengan angka kembarnya.
+     */
+    public function test_a_change_that_leaves_updated_at_untouched_still_invalidates_the_cache(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $group = MemberGroup::factory()->create();
+        $member = Member::factory()->active()->create(['group_id' => $group->id, 'no_urut' => 56]);
+        DuesRecord::factory()->create([
+            'member_id' => $member->id,
+            'period_year' => 2025,
+            'period_month' => 12,
+        ]);
+
+        $url = route('dues.coupons', ['year' => 2025, 'month' => 12, 'group' => $group->id]);
+
+        $this->actingAs($admin)->get($url)->assertOk();
+
+        DB::table('members')->where('id', $member->id)->update(['no_urut' => 57]);
+
+        $renderedNoUrut = null;
+        View::composer('pdf.coupons', function ($view) use (&$renderedNoUrut): void {
+            $renderedNoUrut = $view->getData()['records']->first()->member->no_urut;
+        });
+
+        $this->actingAs($admin)->get($url)->assertOk();
+
+        $this->assertSame(57, $renderedNoUrut, 'Kupon seharusnya dirender ulang dengan no. urut yang baru.');
+    }
+
+    /**
      * Watermark diulang di tiap kupon, jadi logonya harus dirujuk lewat path.
      * Kalau kembali jadi data URI, HTML-nya membengkak ratusan MB saat mencetak
      * seluruh anggota dan proses cetak melambat drastis.

@@ -50,12 +50,15 @@ class PdfController extends Controller
             $year,
             $month,
             $groupId ?? 'semua',
-            $records->count(),
-            // Sidik jari data: begitu ada anggota atau tagihan yang berubah,
-            // kuncinya ikut berubah sehingga cetakan lama tidak pernah tersaji basi.
-            $records->max('updated_at')?->timestamp,
-            $records->max(fn (DuesRecord $record): ?Carbon => $record->member->updated_at)?->timestamp,
-            $organization->updated_at?->timestamp,
+            // Sidik jari dari isi datanya sendiri, bukan waktu ubahnya: perbaikan
+            // langsung di database tidak menyentuh updated_at, dan dulu kupon
+            // lama dengan no. urut kembar tetap tersaji setelah dibetulkan.
+            md5(serialize($records->map(fn (DuesRecord $record): array => [
+                $record->getAttributes(),
+                $record->member->getAttributes(),
+                $record->member->group?->getAttributes(),
+            ])->all())),
+            md5(serialize($organization->getAttributes())),
         ]));
 
         // Disimpan sebagai base64: cache produksi memakai driver database, dan
