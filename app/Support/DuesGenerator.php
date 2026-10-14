@@ -10,6 +10,35 @@ use Illuminate\Support\Facades\DB;
 class DuesGenerator
 {
     /**
+     * Buat tagihan satu anggota untuk satu periode bila belum ada.
+     *
+     * Daftar kolektor digerakkan oleh DuesRecord, bukan Member — anggota yang
+     * baru ditambahkan tanpa tagihan periode berjalan tidak akan terlihat di
+     * HP siapa pun sampai tagihannya ada.
+     *
+     * @return bool True bila tagihan baru dibuat.
+     */
+    public function generateForMember(Member $member, int $year, int $month): bool
+    {
+        if (! $member->status->isActive() || $member->monthly_dues_amount === null) {
+            return false;
+        }
+
+        $record = activity()->withoutLogs(fn () => $member->duesRecords()->firstOrCreate(
+            [
+                'period_year' => $year,
+                'period_month' => $month,
+            ],
+            [
+                'amount_due' => $member->monthly_dues_amount,
+                'status' => DuesStatus::BelumBayar,
+            ],
+        ));
+
+        return $record->wasRecentlyCreated;
+    }
+
+    /**
      * Generate "belum_bayar" dues records for every active member for the given period.
      *
      * Idempotent: the unique (member_id, period_year, period_month) constraint plus
