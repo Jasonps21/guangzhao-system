@@ -52,6 +52,27 @@ class ImportMembersFromExcelTest extends TestCase
         $this->assertDatabaseHas('members', ['name_indonesian' => 'Johnny Sunjaya', 'no_urut' => 57, 'member_number' => '7-057']);
     }
 
+    public function test_imported_members_are_billed_for_the_current_month(): void
+    {
+        $file = $this->workbook([
+            'klp 7' => [
+                [56, '陈秋云', 'Tjin Tjoei Wun'],
+            ],
+        ]);
+        $now = now();
+
+        $this->artisan('members:import-excel', ['file' => $file])->assertSuccessful();
+
+        $member = Member::query()->where('name_indonesian', 'Tjin Tjoei Wun')->firstOrFail();
+
+        $this->assertDatabaseHas('dues_records', [
+            'member_id' => $member->id,
+            'period_year' => $now->year,
+            'period_month' => $now->month,
+            'amount_due' => 20000.00,
+        ]);
+    }
+
     /**
      * Susunan kolom mengikuti file asli: Klp, No, 中文名, Nama, Alamat, Iuran, Keterangan.
      *

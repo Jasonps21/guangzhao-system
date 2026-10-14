@@ -6,7 +6,9 @@ use App\Enums\GroupBasis;
 use App\Enums\MemberStatus;
 use App\Models\Member;
 use App\Models\MemberGroup;
+use App\Support\DuesGenerator;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -217,6 +219,8 @@ class ImportMembersFromExcel extends Command
     {
         $isBebasIuran = $groupNumber === 10;
         $imported = 0;
+        $now = Carbon::now();
+        $generator = app(DuesGenerator::class);
 
         foreach ($this->memberRows($sheet, $groupNumber) as $memberRow) {
             $row = $memberRow['row'];
@@ -233,7 +237,7 @@ class ImportMembersFromExcel extends Command
                 ? $this->cleanString($row[5] ?? null)
                 : $this->cleanString($row[6] ?? null);
 
-            Member::create([
+            $member = Member::create([
                 'name_hanzi' => $memberRow['hanzi'],
                 'name_indonesian' => $memberRow['indonesian'],
                 'address' => $address,
@@ -244,6 +248,10 @@ class ImportMembersFromExcel extends Command
                 'status' => MemberStatus::Aktif,
                 'notes' => $notes,
             ]);
+
+            // Daftar kolektor digerakkan DuesRecord: tanpa tagihan bulan
+            // berjalan, anggota hasil impor tak terlihat di HP lapangan.
+            $generator->generateForMember($member, (int) $now->year, (int) $now->month);
 
             $imported++;
         }
